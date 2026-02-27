@@ -16351,6 +16351,10 @@ int cavs_decoder_seq_init( void *p_decoder , cavs_param *param )
     param->fld_mb_end[0] = (((param->seqsize.lHeight+31)& 0xffffffe0)>>5) - 1; /* top field mb end */
     param->fld_mb_end[1] = (((param->seqsize.lHeight+31)& 0xffffffe0)>>4) - 1; /* bot field mb end */
 
+    /* fix: update interlaced flag from sequence header */
+    param->b_interlaced = param->seqsize.b_interlaced;
+    p->param.b_interlaced = param->seqsize.b_interlaced;
+    
     return 0;
 }
 
