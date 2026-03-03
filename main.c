@@ -81,8 +81,9 @@ int main(int argc, char **argv) {
     memset(&param, 0, sizeof(cavs_param));
 
     // Initialize decoder parameters
-    param.b_accelerate = 0; // Disable acceleration (single-threaded mode is more stable)
-    param.i_thread_num = 1; // Use 1 thread
+    param.b_accelerate = 1; // Enable acceleration (pipeline mode, matches ref.c)
+    param.i_thread_num = 64; // Use up to 64 threads (matches ref.c)
+    param.output_type = -1;  // -1: init, 0: I, 1: P, 2: B
 
     int last_frame_error = 0;
     int got_keyframe = 0;
@@ -99,11 +100,59 @@ int main(int argc, char **argv) {
     uint8_t *ptr = buffer;
     uint8_t *end = buffer + file_size;
     uint32_t current_code;
-    uint8_t *frame_start = find_start_code(ptr, end, &current_code);
-    
+
+    unsigned char nal_buf[BUF_SIZE]; // Temporary buffer for NAL payload
+
+    // -----------------------------------------------------------------------
+    // PROBE PASS (mirrors ref.c's probe stage)
+    // Must run BEFORE cavs_decoder_process so that p->param.b_interlaced is
+    // set correctly before cavs_alloc_resource() allocates image buffers.
+    // cavs_alloc_resource() reads p->param.b_interlaced to decide between
+    // frame-mode strides and doubled (interlaced) strides.
+    // -----------------------------------------------------------------------
+    {
+        int b_probe_done = 0;
+        int b_probe_got_seq = 0;
+        uint8_t *probe_ptr = buffer;
+        uint32_t probe_code;
+        uint8_t *probe_start = find_start_code(probe_ptr, end, &probe_code);
+
+        while (probe_start && !b_probe_done) {
+            long probe_remaining = end - probe_start;
+            int plen;
+
+            if (probe_code == CAVS_VIDEO_SEQUENCE_START_CODE) {
+                cavs_decoder_init_stream(decoder, probe_start, probe_remaining);
+                cavs_decoder_get_one_nal(decoder, nal_buf, &plen);
+                cavs_decoder_probe_seq(decoder, nal_buf, plen);
+                b_probe_got_seq = 1;
+            } else if (probe_code == CAVS_EXTENSION_START_CODE || probe_code == CAVS_USER_DATA_CODE) {
+                if (b_probe_got_seq) {
+                    cavs_decoder_init_stream(decoder, probe_start, probe_remaining);
+                    cavs_decoder_get_one_nal(decoder, nal_buf, &plen);
+                    cavs_decoder_probe_seq(decoder, nal_buf, plen);
+                }
+            } else if (probe_code == CAVS_I_PICUTRE_START_CODE && b_probe_got_seq) {
+                // Parse picture header to determine frame/field format
+                cavs_decoder_init_stream(decoder, probe_start, probe_remaining);
+                cavs_decoder_get_one_nal(decoder, nal_buf, &plen);
+                int ret = cavs_decoder_pic_header(decoder, nal_buf, plen, &param, probe_code);
+                if (ret != CAVS_ERROR) {
+                    cavs_decoder_set_format_type(decoder, &param);
+                }
+                b_probe_done = 1; // probe complete
+            }
+
+            uint32_t next_code;
+            uint8_t *next = find_start_code(probe_start + 4, end, &next_code);
+            probe_start = next;
+            probe_code = next_code;
+        }
+    }
+
     int frame_count = 0;
     int input_frame_count = 0;
-    unsigned char nal_buf[BUF_SIZE]; // Temporary buffer for NAL payload
+    uint8_t *frame_start = find_start_code(ptr, end, &current_code);
 
     while (frame_start) {
         // Calculate remaining size from this start code to end of file
@@ -120,7 +169,11 @@ int main(int argc, char **argv) {
             
             cavs_decoder_process(decoder, nal_buf, len);
             cavs_decoder_get_seq(decoder, &param.seqsize);
-            
+
+            // Reset param fields per seq header (matches ref.c cavs_decoder_param_init)
+            param.i_thread_num = 64;
+            param.output_type = -1;
+
             if (param.seq_header_flag == 0) {
                 cavs_decoder_seq_init(decoder, &param);
                 if (cavs_decoder_buffer_init(&param) < 0) {
@@ -143,6 +196,13 @@ int main(int argc, char **argv) {
             if (last_frame_error) {
                 last_frame_error = 0;
             }
+        }
+        else if (current_code == CAVS_EXTENSION_START_CODE || current_code == CAVS_USER_DATA_CODE) {
+            // Extension / user data: must be processed so the decoder updates its internal state
+            cavs_decoder_init_stream(decoder, frame_start, remaining_len);
+            int len;
+            cavs_decoder_get_one_nal(decoder, nal_buf, &len);
+            cavs_decoder_process(decoder, nal_buf, len);
         } 
         else if (current_code == CAVS_I_PICUTRE_START_CODE || current_code == CAVS_PB_PICUTRE_START_CODE) {
             
@@ -199,20 +259,17 @@ int main(int argc, char **argv) {
         frame_start = next_start;
     }
 
-    // Flush delayed frames (B-frames)
+    // Flush delayed frames
     if (param.seq_header_flag) {
-        // Try to flush pipeline first
-        if (param.b_accelerate) {
-            int ret = cavs_decode_one_frame_delay(decoder, &param);
-            if (ret == CAVS_FRAME_OUT) {
-                write_yuv(fout, &param);
-                frame_count++;
-                printf("Delayed Frame (Pipeline) %d decoded\n", frame_count);
-            }
+        // Step 1: flush the pipeline-delayed reference frame (b_accelerate mode keeps one ref frame buffered)
+        int ret = cavs_decode_one_frame_delay(decoder, &param);
+        if (ret == CAVS_FRAME_OUT) {
+            write_yuv(fout, &param);
+            frame_count++;
+            printf("Delayed Frame (Pipeline) %d decoded\n", frame_count);
         }
 
-        // Flush the last reordered frame
-        // Note: cavs_out_delay_frame_end does not clear the internal state, so we must call it only once
+        // Step 2: flush the final reordered B-frame that may be held in the output buffer
         if (cavs_out_delay_frame_end(decoder, param.p_out_yuv)) {
              write_yuv(fout, &param);
              frame_count++;
