@@ -104,53 +104,6 @@ int main(int argc, char **argv) {
 
     unsigned char nal_buf[BUF_SIZE]; // Temporary buffer for NAL payload
 
-    // -----------------------------------------------------------------------
-    // PROBE PASS (mirrors ref.c's probe stage)
-    // Must run BEFORE cavs_decoder_process so that p->param.b_interlaced is
-    // set correctly before cavs_alloc_resource() allocates image buffers.
-    // cavs_alloc_resource() reads p->param.b_interlaced to decide between
-    // frame-mode strides and doubled (interlaced) strides.
-    // -----------------------------------------------------------------------
-    {
-        int b_probe_done = 0;
-        int b_probe_got_seq = 0;
-        uint8_t *probe_ptr = buffer;
-        uint32_t probe_code;
-        uint8_t *probe_start = find_start_code(probe_ptr, end, &probe_code);
-
-        while (probe_start && !b_probe_done) {
-            long probe_remaining = end - probe_start;
-            int plen;
-
-            if (probe_code == CAVS_VIDEO_SEQUENCE_START_CODE) {
-                cavs_decoder_init_stream(decoder, probe_start, probe_remaining);
-                cavs_decoder_get_one_nal(decoder, nal_buf, &plen);
-                cavs_decoder_probe_seq(decoder, nal_buf, plen);
-                b_probe_got_seq = 1;
-            } else if (probe_code == CAVS_EXTENSION_START_CODE || probe_code == CAVS_USER_DATA_CODE) {
-                if (b_probe_got_seq) {
-                    cavs_decoder_init_stream(decoder, probe_start, probe_remaining);
-                    cavs_decoder_get_one_nal(decoder, nal_buf, &plen);
-                    cavs_decoder_probe_seq(decoder, nal_buf, plen);
-                }
-            } else if (probe_code == CAVS_I_PICUTRE_START_CODE && b_probe_got_seq) {
-                // Parse picture header to determine frame/field format
-                cavs_decoder_init_stream(decoder, probe_start, probe_remaining);
-                cavs_decoder_get_one_nal(decoder, nal_buf, &plen);
-                int ret = cavs_decoder_pic_header(decoder, nal_buf, plen, &param, probe_code);
-                if (ret != CAVS_ERROR) {
-                    cavs_decoder_set_format_type(decoder, &param);
-                }
-                b_probe_done = 1; // probe complete
-            }
-
-            uint32_t next_code;
-            uint8_t *next = find_start_code(probe_start + 4, end, &next_code);
-            probe_start = next;
-            probe_code = next_code;
-        }
-    }
-
     int frame_count = 0;
     int input_frame_count = 0;
     uint8_t *frame_start = find_start_code(ptr, end, &current_code);
@@ -187,10 +140,8 @@ int main(int argc, char **argv) {
                        param.seqsize.i_frame_rate_num, param.seqsize.i_frame_rate_den, 
                        param.seqsize.b_interlaced);
             } else {
-                if (param.b_accelerate) {
-                    if (last_frame_error) {
-                        cavs_decoder_seq_header_reset_pipeline(decoder);
-                    }
+                if (last_frame_error) {
+                    cavs_decoder_recover(decoder);
                 }
             }
 
