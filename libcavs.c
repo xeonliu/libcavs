@@ -8009,7 +8009,11 @@ static int cavs_alloc_resource( cavs_decoder *p )
 {
     uint32_t i;
     uint32_t i_mb_width, i_mb_height, i_edge;
-    int b_interlaced = p->param.b_interlaced;
+    int b_interlaced = !p->vsh.b_progressive_sequence;
+    /* Propagate to param so that the pipeline decoder copy done in
+     * cavs_decoder_process() (*p->unused[1] = *p) carries the correct
+     * value before cavs_decoder_seq_init() has a chance to set it. */
+    p->param.b_interlaced = b_interlaced;
     
     i_mb_width = (p->vsh.i_horizontal_size+15)>>4;
     if ( p->vsh.b_progressive_sequence )
@@ -16774,6 +16778,16 @@ int cavs_decoder_seq_header_reset_pipeline( void* p_decoder )
     p->current[1] = NULL;
     
     return 0;
+}
+
+void cavs_decoder_recover( void *p_decoder )
+{
+    cavs_decoder *p = (cavs_decoder *)p_decoder;
+
+    if( p->param.b_accelerate )
+        cavs_decoder_seq_header_reset_pipeline( p_decoder );
+    else
+        cavs_decoder_seq_header_reset( p_decoder );
 }
 
 int cavs_decoder_low_delay_value( void* p_decoder )

@@ -98,35 +98,6 @@ int main(int argc, char **argv)
     uint8_t *end = buffer + file_size;
     uint8_t nal_buf[BUF_SIZE];
 
-    /* ---- probe pass ---- */
-    {
-        int b_seq = 0, b_done = 0;
-        uint32_t pc;
-        uint8_t *ps = find_start_code(buffer, end, &pc);
-        while (ps && !b_done) {
-            long rem = end - ps;
-            int plen;
-            if (pc == CAVS_VIDEO_SEQUENCE_START_CODE) {
-                cavs_decoder_init_stream(decoder, ps, rem);
-                cavs_decoder_get_one_nal(decoder, nal_buf, &plen);
-                cavs_decoder_probe_seq(decoder, nal_buf, plen);
-                b_seq = 1;
-            } else if ((pc == CAVS_EXTENSION_START_CODE || pc == CAVS_USER_DATA_CODE) && b_seq) {
-                cavs_decoder_init_stream(decoder, ps, rem);
-                cavs_decoder_get_one_nal(decoder, nal_buf, &plen);
-                cavs_decoder_probe_seq(decoder, nal_buf, plen);
-            } else if (pc == CAVS_I_PICUTRE_START_CODE && b_seq) {
-                cavs_decoder_init_stream(decoder, ps, rem);
-                cavs_decoder_get_one_nal(decoder, nal_buf, &plen);
-                int r = cavs_decoder_pic_header(decoder, nal_buf, plen, &param, pc);
-                if (r != CAVS_ERROR) cavs_decoder_set_format_type(decoder, &param);
-                b_done = 1;
-            }
-            uint32_t nc; uint8_t *ns = find_start_code(ps + 4, end, &nc);
-            ps = ns; pc = nc;
-        }
-    }
-
     /* ---- decode loop ---- */
     MD5_CTX_T ctx;
     MD5_INIT(&ctx);
@@ -153,8 +124,8 @@ int main(int argc, char **argv)
                     goto cleanup;
                 }
                 param.seq_header_flag = 1;
-            } else if (param.b_accelerate && last_err) {
-                cavs_decoder_seq_header_reset_pipeline(decoder);
+            } else if (last_err) {
+                cavs_decoder_recover(decoder);
             }
             if (last_err) last_err = 0;
 

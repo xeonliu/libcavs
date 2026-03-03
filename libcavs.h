@@ -6,45 +6,10 @@
  *   AVS1-P16 (Guangdian profile, GB/T 20090.16)
  *
  * --------------------------------------------------------------------------
- * MANDATORY CALLING SEQUENCE
+ * CALLING SEQUENCE
  * --------------------------------------------------------------------------
  *
- * The API has a strict two-phase initialization protocol that is NOT
- * enforced by the library itself.  Violating the order causes silent
- * memory corruption (wrong image-buffer strides) with no error returned.
- *
- * PHASE 1 – PROBE  (scan forward until the first I-picture header)
- * ----------------------------------------------------------------
- * Purpose: determine frame/field coding format BEFORE any memory is
- * allocated inside cavs_decoder_process().
- *
- *   for each NAL unit (00 00 01 XX) from the start of the bitstream:
- *
- *     case CAVS_VIDEO_SEQUENCE_START_CODE:
- *       cavs_decoder_init_stream(dec, nal_start, remaining);
- *       cavs_decoder_get_one_nal(dec, buf, &len);
- *       cavs_decoder_probe_seq(dec, buf, len);        // parses vsh, sets b_get_video_sequence_header
- *
- *     case CAVS_EXTENSION_START_CODE / CAVS_USER_DATA_CODE:
- *       cavs_decoder_init_stream(dec, nal_start, remaining);
- *       cavs_decoder_get_one_nal(dec, buf, &len);
- *       cavs_decoder_probe_seq(dec, buf, len);        // parses display/color extension
- *
- *     case CAVS_I_PICUTRE_START_CODE:
- *       cavs_decoder_init_stream(dec, nal_start, remaining);
- *       cavs_decoder_get_one_nal(dec, buf, &len);
- *       cavs_decoder_pic_header(dec, buf, len, param, CAVS_I_PICUTRE_START_CODE);
- *                                                     // sets param->b_interlaced
- *       cavs_decoder_set_format_type(dec, param);     // copies b_interlaced → dec->param
- *       // PROBE COMPLETE – break out of probe loop
- *
- * WHY this matters: cavs_decoder_process() calls cavs_alloc_resource()
- * internally.  cavs_alloc_resource() reads dec->param.b_interlaced to
- * choose between frame-mode strides (width+32) and field-mode strides
- * (2*(width+32)).  If b_interlaced is wrong at that point, every image
- * buffer is the wrong size and all decoded pixel data is misaligned.
- *
- * PHASE 2 – DECODE LOOP
+ * PHASE 1 – DECODE LOOP
  * ----------------------------------------------------------------
  *
  *   // Per sequence header:
@@ -58,8 +23,8 @@
  *     cavs_decoder_seq_init(dec, param);              // sets fld_mb_end, propagates b_interlaced
  *     cavs_decoder_buffer_init(param);                // allocs param->p_out_yuv[3]
  *     param->seq_header_flag = 1;
- *   } else if (b_accelerate && last_frame_error) {
- *     cavs_decoder_seq_header_reset_pipeline(dec);
+ *   } else if (last_frame_error) {
+ *     cavs_decoder_recover(dec);                      // resets pipeline after error
  *   }
  *
  *   // Per extension / user-data NAL:
@@ -72,7 +37,7 @@
  *   // ret == CAVS_FRAME_OUT → param->p_out_yuv contains a decoded frame in display order
  *   // ret == CAVS_ERROR     → mark error, skip until next I-frame
  *
- * PHASE 3 – FLUSH (end of stream)
+ * PHASE 2 – FLUSH (end of stream)
  * ----------------------------------------------------------------
  *   // b_accelerate mode keeps one reference frame buffered in the pipeline:
  *   ret = cavs_decode_one_frame_delay(dec, param);
@@ -297,22 +262,21 @@ int cavs_decoder_get_one_nal( void *p_decoder, unsigned char *buf, int *length )
 
 
 /* =========================================================================
- * PROBE PHASE  (must complete before the decode loop)
+ * PROBE PHASE  (deprecated – no longer required since cavs_alloc_resource()
+ *               reads b_interlaced directly from the parsed sequence header)
  * =========================================================================*/
 
 /**
  * cavs_decoder_probe_seq – lightweight sequence/extension parser used
  * exclusively during the probe phase.
  *
+ * @deprecated No longer required. cavs_decoder_process() can now be called
+ *             directly without a prior probe pass.
+ *
  * Unlike cavs_decoder_process(), this function does NOT allocate any
  * internal image buffers.  It parses the sequence header into dec->vsh and
  * sets dec->b_get_video_sequence_header = 1, making the decoder ready to
  * accept picture headers.
- *
- * Must be called for:
- *   CAVS_VIDEO_SEQUENCE_START_CODE  – to populate dec->vsh
- *   CAVS_EXTENSION_START_CODE       – to process display extension etc.
- *   CAVS_USER_DATA_CODE             – to process user-data
  *
  * @param p_in        NAL buffer returned by cavs_decoder_get_one_nal().
  * @param i_in_length length returned by cavs_decoder_get_one_nal().
@@ -323,6 +287,11 @@ int cavs_decoder_probe_seq( void *p_decoder, unsigned char *p_in, int i_in_lengt
 
 /**
  * cavs_decoder_pic_header – parse a picture header NAL during probe.
+ *
+ * @deprecated No longer required. cavs_alloc_resource() now reads
+ *             b_interlaced directly from the parsed sequence header,
+ *             so pre-scanning the bitstream for picture headers is
+ *             not needed.
  *
  * Reads the I- or PB-picture header and stores result in private decoder
  * state AND writes param->b_interlaced (0=frame, 1=field).
@@ -344,8 +313,9 @@ int cavs_decoder_pic_header( void *p_decoder, unsigned char *p_buf, int i_len,
  * cavs_decoder_set_format_type – copy param->b_interlaced into the decoder's
  * internal param so that cavs_alloc_resource() uses the correct stride.
  *
- * Must be called immediately after cavs_decoder_pic_header() during probe,
- * and before cavs_decoder_process() is ever called.
+ * @deprecated No longer required. cavs_alloc_resource() now derives
+ *             b_interlaced directly from the sequence header, so this
+ *             function is a no-op for the common use case.
  */
 int cavs_decoder_set_format_type( void *p_decoder, cavs_param *param );
 
@@ -358,20 +328,16 @@ int cavs_decoder_set_format_type( void *p_decoder, cavs_param *param );
  * cavs_decoder_process – process a sequence header, extension, or end NAL.
  *
  * For CAVS_VIDEO_SEQUENCE_START_CODE: parses the sequence header, calls
- * cavs_alloc_resource() to allocate internal image buffers (using
- * dec->param.b_interlaced which MUST already be set via the probe phase),
- * and initialises the thread pool.
+ * cavs_alloc_resource() to allocate internal image buffers (stride is
+ * determined automatically from the sequence header), and initialises the
+ * thread pool.
  *
  * For CAVS_EXTENSION_START_CODE / CAVS_USER_DATA_CODE: updates decoder
- * internal state (color/display metadata).  Must be called for these NALs
- * in the decode loop as well as during probe.
+ * internal state (color/display metadata).
  *
  * @param p_in      NAL buffer from cavs_decoder_get_one_nal().
  * @param i_in_len  NAL length.
  * @return CAVS_SEQ_HEADER, CAVS_SEQ_END, CAVS_USER_DATA, or CAVS_ERROR.
- *
- * PRECONDITION: dec->param.b_interlaced must be correctly set via probe
- * phase before this is called the FIRST time per sequence.
  */
 int cavs_decoder_process( void *p_decoder, unsigned char *p_in, int i_in_len );
 
@@ -414,6 +380,20 @@ int cavs_decoder_seq_header_reset_pipeline( void *p_decoder );
  * cavs_decoder_seq_header_reset – lighter reset (non-pipeline path).
  */
 int cavs_decoder_seq_header_reset( void *p_decoder );
+
+/**
+ * cavs_decoder_recover – reset decoder state after CAVS_ERROR.
+ *
+ * Call when a new sequence header arrives after a decode error.
+ * Internally selects and calls the correct reset function
+ * (cavs_decoder_seq_header_reset_pipeline for b_accelerate mode,
+ * cavs_decoder_seq_header_reset otherwise).
+ *
+ * Replaces the manual cavs_decoder_seq_header_reset_pipeline() /
+ * cavs_decoder_seq_header_reset() call that callers previously had to
+ * guard with explicit b_accelerate checks.
+ */
+void cavs_decoder_recover( void *p_decoder );
 
 
 /* =========================================================================
