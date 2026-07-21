@@ -7,6 +7,7 @@
 #include <cavs/cavs.h>
 #include "coefficients.h"
 #include "macroblock.h"
+#include "prediction.h"
 #include "reconstruction.h"
 #include <stddef.h>
 #include <stdint.h>
@@ -77,6 +78,9 @@ int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
         int32_t predicted[64];
         int32_t matrix[64];
         int16_t residual[64];
+        cavs_intra_references_8x8 references;
+        uint8_t prediction[64];
+        uint8_t reconstructed[64];
         uint8_t weights[64];
         unsigned index;
         for (index = 0U; index < 64U; ++index) {
@@ -90,6 +94,21 @@ int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
         (void)cavs_inverse_quantize_8x8(
             matrix, predicted, weights, data[0] & 63U, quant);
         (void)cavs_inverse_transform_8x8(quant, residual);
+        memset(&references, 0, sizeof(references));
+        references.top_available = UINT32_C(0x1ffff);
+        references.left_available = UINT32_C(0x1ffff);
+        for (index = 0U; index < 17U; ++index) {
+            references.top[index] = data[index % size];
+            references.left[index] = data[(index * 7U) % size];
+        }
+        references.left[0] = references.top[0];
+        (void)cavs_predict_intra_luma_8x8(
+            &references, (cavs_intra_luma_mode_8x8)(data[0] % 5U), prediction);
+        (void)cavs_predict_intra_chroma_8x8(
+            &references, (cavs_intra_chroma_mode_8x8)(data[0] % 4U), prediction);
+        (void)cavs_reconstruct_samples_8x8(
+            prediction, data[0] & 1U ? prediction : NULL,
+            residual, reconstructed);
     }
     return 0;
 }

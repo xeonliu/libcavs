@@ -16,6 +16,7 @@ void test_syntax(void);
 void test_macroblock(void);
 void test_coefficients(void);
 void test_reconstruction(void);
+void test_prediction(void);
 
 /* Exercises fixed-width reads and exact final-byte bit limits. */
 static void test_fixed_bits(void) {
@@ -88,5 +89,6 @@ int main(void) {
     test_macroblock();
     test_coefficients();
     test_reconstruction();
+    test_prediction();
     return 0;
 }

@@ -15,7 +15,7 @@ outputs.
 | Macroblock and block syntax | partial | not-started | baseline YUV420 basic-entropy 8x8 macroblock headers, full Table 45 mapping, and coefficient blocks |
 | Basic/advanced entropy decoding | partial | not-started | baseline 8x8 basic entropy, Annex D Tables D.1-D.20, escape and inverse-run tests |
 | 4x4/8x8 inverse transform and quantization | partial | not-started | baseline 8x8 frame/field inverse scan, Table 70/71 inverse quantization, and T8 inverse transform; 4x4 and weighted modes pending |
-| Intra/inter prediction and compensation | not-started | not-started | - |
+| Intra/inter prediction and compensation | partial | not-started | baseline 8x8 luma/chroma intra modes and single/bidirectional sample reconstruction; reference acquisition, inter prediction, and motion compensation pending |
 | Loop filtering | not-started | not-started | - |
 | YUV420P8 progressive frame I/P/B | not-started | not-started | - |
 | YUV422P8, interlace, field pictures | not-started | not-started | - |
@@ -23,7 +23,7 @@ outputs.
 | Metadata and unknown extension retention | partial | partial | copied user-data and raw-extension API events; known metadata parsing pending |
 | BBV validation tooling | not-started | not-started | - |
 | `cavsdec` input, output, frame limit, and logging | partial | partial | file/stdin Annex-B scan and planar-output path; frame reconstruction pending |
-| Random-input robustness | partial | partial | libFuzzer/AFL public API, baseline macroblock, coefficient, and reconstruction-math harnesses; 1,000-run sanitizer smoke test |
+| Random-input robustness | partial | partial | libFuzzer/AFL public API, baseline macroblock, coefficient, reconstruction-math, and intra-prediction harnesses; 1,000-run sanitizer smoke test |
 
 No profile is currently advertised as decodable. Version 1.0 is blocked until
 every applicable row is conformant and the release gates in `CONTRIBUTING.md`
