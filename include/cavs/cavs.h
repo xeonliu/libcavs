@@ -1,3 +1,9 @@
+/*
+ * Copyright (c) 2026 libcavs contributors
+ * SPDX-License-Identifier: BSD-3-Clause
+ *
+ * Public API for the independent libcavs decoder implementation.
+ */
 #ifndef CAVS_CAVS_H
 #define CAVS_CAVS_H
 
@@ -85,19 +91,37 @@ typedef struct cavs_event {
     size_t size;
 } cavs_event;
 
+/** Creates a decoder using optional caller-provided allocation and logging. */
 CAVS_API cavs_result cavs_decoder_create(const cavs_decoder_config *config, cavs_decoder **decoder);
+
+/** Submits one complete Annex-B unit, including its 00 00 01 xx start code. */
 CAVS_API cavs_result cavs_decoder_send_nal(cavs_decoder *decoder, const cavs_packet *packet);
+
+/** Receives the next queued event without blocking. */
 CAVS_API cavs_result cavs_decoder_receive_event(cavs_decoder *decoder, cavs_event *event);
+
+/** Signals end of input and starts draining delayed frames and the end event. */
 CAVS_API cavs_result cavs_decoder_flush(cavs_decoder *decoder);
+
+/** Clears stream state so that the instance can accept a new sequence. */
 CAVS_API cavs_result cavs_decoder_reset(cavs_decoder *decoder);
+
+/** Releases a decoder and every resource still owned by it. */
 CAVS_API void cavs_decoder_destroy(cavs_decoder *decoder);
+
+/** Acquires another reference to a library-owned output frame. */
 CAVS_API cavs_frame *cavs_frame_ref(cavs_frame *frame);
+
+/** Releases a frame reference and clears the caller's pointer. */
 CAVS_API void cavs_frame_unref(cavs_frame **frame);
+
+/** Returns the library version as a stable, process-lifetime string. */
 CAVS_API const char *cavs_version(void);
+
+/** Returns a process-lifetime English description of a result code. */
 CAVS_API const char *cavs_strerror(cavs_result result);
 
 #ifdef __cplusplus
 }
 #endif
 #endif
-

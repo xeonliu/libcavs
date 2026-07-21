@@ -7,7 +7,8 @@ outputs.
 | Area | Baseline 0x20 | Broadcast 0x48 | Evidence |
 | --- | --- | --- | --- |
 | Annex-B unit boundary validation | partial | partial | API prefix validation |
-| Safe bit reading and unsigned Exp-Golomb | partial | partial | `cavs_unit` |
+| Safe bit reading and order-k signed/unsigned Exp-Golomb | implemented | partial | `cavs_unit` |
+| Pseudo-start-code removal and bit repacking | implemented | implemented | `cavs_unit` |
 | Sequence, extension, picture, slice syntax | not-started | not-started | - |
 | Macroblock and block syntax | not-started | not-started | - |
 | Basic/advanced entropy decoding | not-started | not-started | - |

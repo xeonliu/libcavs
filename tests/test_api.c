@@ -1,8 +1,16 @@
+/*
+ * Copyright (c) 2026 libcavs contributors
+ * SPDX-License-Identifier: BSD-3-Clause
+ *
+ * Public decoder API state-machine tests.
+ */
 #include <cavs/cavs.h>
 #include <assert.h>
 
+/* Supplies one half of an intentionally invalid allocator pair. */
 static void dummy_free(void *opaque, void *ptr) { (void)opaque; (void)ptr; }
 
+/* Verifies argument validation, drain behavior, and reset behavior. */
 int main(void) {
     static const uint8_t valid_prefix[] = { 0, 0, 1, 0xb0 };
     static const uint8_t invalid_prefix[] = { 0, 0, 2, 0xb0 };

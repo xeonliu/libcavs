@@ -1,3 +1,10 @@
+/*
+ * Copyright (c) 2026 libcavs contributors
+ * SPDX-License-Identifier: BSD-3-Clause
+ *
+ * Decoder lifetime and public API state transitions. Syntax and reconstruction
+ * are added in separate modules as their conformance coverage becomes ready.
+ */
 #include <cavs/cavs.h>
 #include <stdlib.h>
 #include <string.h>
@@ -16,9 +23,13 @@ struct cavs_decoder {
     int end_pending;
 };
 
+/* Adapts the C runtime allocator to the public allocator callback signature. */
 static void *default_alloc(void *opaque, size_t size) { (void)opaque; return malloc(size); }
+
+/* Adapts the C runtime deallocator to the public allocator callback signature. */
 static void default_free(void *opaque, void *ptr) { (void)opaque; free(ptr); }
 
+/* Validates configuration and creates an empty decoder state. */
 cavs_result cavs_decoder_create(const cavs_decoder_config *config, cavs_decoder **out) {
     cavs_decoder_config cfg;
     cavs_decoder *decoder;
@@ -33,6 +44,7 @@ cavs_result cavs_decoder_create(const cavs_decoder_config *config, cavs_decoder 
     return CAVS_OK;
 }
 
+/* Validates unit framing before dispatching to profile-specific syntax code. */
 cavs_result cavs_decoder_send_nal(cavs_decoder *decoder, const cavs_packet *packet) {
     if (decoder == NULL || packet == NULL || packet->data == NULL || packet->size < 4U) return CAVS_ERR_INVALID_ARGUMENT;
     if (decoder->flushing) return CAVS_ERR_INVALID_STATE;
@@ -40,6 +52,7 @@ cavs_result cavs_decoder_send_nal(cavs_decoder *decoder, const cavs_packet *pack
     return CAVS_ERR_UNSUPPORTED_PROFILE;
 }
 
+/* Returns queued events and models the terminal drain state. */
 cavs_result cavs_decoder_receive_event(cavs_decoder *decoder, cavs_event *event) {
     if (decoder == NULL || event == NULL) return CAVS_ERR_INVALID_ARGUMENT;
     memset(event, 0, sizeof(*event));
@@ -47,21 +60,25 @@ cavs_result cavs_decoder_receive_event(cavs_decoder *decoder, cavs_event *event)
     return decoder->flushing ? CAVS_EOF : CAVS_AGAIN;
 }
 
+/* Enters the drain state exactly once and schedules an end event. */
 cavs_result cavs_decoder_flush(cavs_decoder *decoder) {
     if (decoder == NULL) return CAVS_ERR_INVALID_ARGUMENT;
     if (!decoder->flushing) { decoder->flushing = 1; decoder->end_pending = 1; }
     return CAVS_OK;
 }
 
+/* Restores a decoder to its initial input-accepting state. */
 cavs_result cavs_decoder_reset(cavs_decoder *decoder) {
     if (decoder == NULL) return CAVS_ERR_INVALID_ARGUMENT;
     decoder->flushing = 0; decoder->end_pending = 0; return CAVS_OK;
 }
 
+/* Releases the decoder through the allocator selected at creation. */
 void cavs_decoder_destroy(cavs_decoder *decoder) {
     if (decoder != NULL) decoder->config.free(decoder->config.allocator_opaque, decoder);
 }
 
+/* Increments a frame reference unless its counter is saturated. */
 cavs_frame *cavs_frame_ref(cavs_frame *frame) {
     cavs_frame_storage *storage;
     if (frame == NULL) return NULL;
@@ -71,6 +88,7 @@ cavs_frame *cavs_frame_ref(cavs_frame *frame) {
     return frame;
 }
 
+/* Drops one frame reference and releases storage at the last reference. */
 void cavs_frame_unref(cavs_frame **frame) {
     cavs_frame_storage *storage;
     if (frame == NULL || *frame == NULL) return;
@@ -78,8 +96,11 @@ void cavs_frame_unref(cavs_frame **frame) {
     *frame = NULL;
     if (--storage->references == 0U) storage->free(storage->allocator_opaque, storage);
 }
+
+/* Returns the development version of this pre-conformance implementation. */
 const char *cavs_version(void) { return "0.1.0-dev"; }
 
+/* Maps every public result code to a stable diagnostic string. */
 const char *cavs_strerror(cavs_result result) {
     switch (result) {
     case CAVS_OK: return "success"; case CAVS_AGAIN: return "try again"; case CAVS_EOF: return "end of stream";
