@@ -3,3 +3,6 @@ INFRA-001,Annex-B start-code validation,GB/T 20090.2,2013,7.1.1,,0x20,"Direct sy
 INFRA-002,Unsigned and signed exponential-Golomb readers,GB/T 20090.2,2013,8.2,"Tables 42; 43",0x20,"Formula implementation and independent table transcription","Independent CodeNum vectors",implemented
 INFRA-003,Pseudo-start-code removal,GB/T 20090.2,2013,"Normative Annex A",,0x20,"Drop two least-significant prevention bits and repack","00 00 02 c0 vector",implemented
 INFRA-004,Pseudo-start-code removal,GB/T 20090.16,2016,"Normative Annex A",,0x48,"Same normative process as Part 2","Shared 00 00 02 c0 vector",implemented
+SYNTAX-001,Start-code classification,GB/T 20090.2,2013,7.1,"Table 12",0x20,"Independent range and value mapping","Boundary and enumerated start-code tests",implemented
+SYNTAX-002,Common sequence header,GB/T 20090.2,2013,7.2.2,"Table 15; Tables 30-33; normative Annex B",0x20,"Direct field parsing and scoped constraint validation","Independent 112-bit baseline vector",implemented
+SYNTAX-003,Broadcast sequence header,GB/T 20090.16,2016,7.2.2,"Table 14; normative Annex B",0x48,"Direct field parsing and scoped constraint validation","Independent 112-bit broadcast vector",implemented

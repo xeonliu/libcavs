@@ -11,6 +11,9 @@
 #include <limits.h>
 #include <stdint.h>
 
+/* Runs syntax tests implemented in the companion translation unit. */
+void test_syntax(void);
+
 /* Exercises fixed-width reads and exact final-byte bit limits. */
 static void test_fixed_bits(void) {
     static const uint8_t data[] = { 0xb3, 0x80 };
@@ -78,5 +81,6 @@ int main(void) {
     test_exponential_golomb();
     test_pseudo_start_code();
     test_safe_helpers();
+    test_syntax();
     return 0;
 }

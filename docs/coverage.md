@@ -9,7 +9,9 @@ outputs.
 | Annex-B unit boundary validation | partial | partial | API prefix validation |
 | Safe bit reading and order-k signed/unsigned Exp-Golomb | implemented | partial | `cavs_unit` |
 | Pseudo-start-code removal and bit repacking | implemented | implemented | `cavs_unit` |
-| Sequence, extension, picture, slice syntax | not-started | not-started | - |
+| Sequence header syntax and change events | partial | partial | `cavs_unit`, `cavs_api_test` |
+| Level identifier and profile-format constraints | partial | partial | identifier tests; level maxima pending |
+| Extension, picture, slice syntax | not-started | not-started | - |
 | Macroblock and block syntax | not-started | not-started | - |
 | Basic/advanced entropy decoding | not-started | not-started | - |
 | 4x4/8x8 inverse transform and quantization | not-started | not-started | - |

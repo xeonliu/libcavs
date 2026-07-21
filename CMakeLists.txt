@@ -7,7 +7,7 @@ include(CMakePackageConfigHelpers)
 option(LIBCAVS_BUILD_SHARED "Build the shared library" ON)
 option(LIBCAVS_BUILD_TESTS "Build unit tests" ON)
 
-set(LIBCAVS_SOURCES src/decoder.c src/bitreader.c src/safe.c src/pseudo_start_code.c)
+set(LIBCAVS_SOURCES src/decoder.c src/bitreader.c src/safe.c src/pseudo_start_code.c src/syntax.c)
 
 add_library(cavs_static STATIC ${LIBCAVS_SOURCES})
 add_library(cavs::static ALIAS cavs_static)
@@ -42,7 +42,8 @@ endif()
 
 if(LIBCAVS_BUILD_TESTS)
   enable_testing()
-  add_executable(cavs_unit tests/test_bitreader.c src/bitreader.c src/safe.c src/pseudo_start_code.c)
+  add_executable(cavs_unit tests/test_bitreader.c tests/test_syntax.c
+    src/bitreader.c src/safe.c src/pseudo_start_code.c src/syntax.c)
   target_include_directories(cavs_unit PRIVATE src include)
   target_compile_features(cavs_unit PRIVATE c_std_99)
   add_test(NAME cavs_unit COMMAND cavs_unit)

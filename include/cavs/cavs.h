@@ -71,6 +71,21 @@ typedef struct cavs_packet {
     void *opaque;
 } cavs_packet;
 
+/** Parameters established by the current video sequence header. */
+typedef struct cavs_sequence_info {
+    uint8_t profile_id;
+    uint8_t level_id;
+    uint8_t progressive_sequence;
+    uint32_t display_width;
+    uint32_t display_height;
+    cavs_pixel_format format;
+    uint8_t aspect_ratio_code;
+    uint8_t frame_rate_code;
+    uint64_t bit_rate;
+    uint8_t low_delay;
+    uint64_t bbv_buffer_size_bits;
+} cavs_sequence_info;
+
 struct cavs_frame {
     const uint8_t *plane[3];
     ptrdiff_t stride[3];
@@ -87,6 +102,7 @@ struct cavs_frame {
 typedef struct cavs_event {
     cavs_event_type type;
     cavs_frame *frame;
+    cavs_sequence_info sequence;
     const uint8_t *data;
     size_t size;
 } cavs_event;

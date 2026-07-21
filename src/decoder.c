@@ -6,6 +6,7 @@
  * are added in separate modules as their conformance coverage becomes ready.
  */
 #include <cavs/cavs.h>
+#include "syntax.h"
 #include <stdlib.h>
 #include <string.h>
 #include <limits.h>
@@ -21,6 +22,9 @@ struct cavs_decoder {
     cavs_decoder_config config;
     int flushing;
     int end_pending;
+    int sequence_pending;
+    int has_sequence;
+    cavs_sequence_info sequence;
 };
 
 /* Adapts the C runtime allocator to the public allocator callback signature. */
@@ -46,16 +50,40 @@ cavs_result cavs_decoder_create(const cavs_decoder_config *config, cavs_decoder 
 
 /* Validates unit framing before dispatching to profile-specific syntax code. */
 cavs_result cavs_decoder_send_nal(cavs_decoder *decoder, const cavs_packet *packet) {
+    cavs_unit_type unit_type;
+    cavs_sequence_info sequence;
+    cavs_result result;
     if (decoder == NULL || packet == NULL || packet->data == NULL || packet->size < 4U) return CAVS_ERR_INVALID_ARGUMENT;
     if (decoder->flushing) return CAVS_ERR_INVALID_STATE;
     if (packet->data[0] != 0U || packet->data[1] != 0U || packet->data[2] != 1U) return CAVS_ERR_CORRUPT_BITSTREAM;
-    return CAVS_ERR_UNSUPPORTED_PROFILE;
+    if (decoder->sequence_pending) return CAVS_AGAIN;
+    unit_type = cavs_classify_start_code(packet->data[3]);
+    if (unit_type == CAVS_UNIT_SEQUENCE_END) {
+        decoder->flushing = 1;
+        decoder->end_pending = 1;
+        return CAVS_OK;
+    }
+    if (unit_type != CAVS_UNIT_SEQUENCE_HEADER) return CAVS_ERR_UNSUPPORTED_PROFILE;
+    result = cavs_parse_sequence_header(packet->data + 4U, packet->size - 4U, &sequence);
+    if (result != CAVS_OK) return result;
+    if (!decoder->has_sequence || memcmp(&decoder->sequence, &sequence, sizeof(sequence)) != 0) {
+        decoder->sequence = sequence;
+        decoder->has_sequence = 1;
+        decoder->sequence_pending = 1;
+    }
+    return CAVS_OK;
 }
 
 /* Returns queued events and models the terminal drain state. */
 cavs_result cavs_decoder_receive_event(cavs_decoder *decoder, cavs_event *event) {
     if (decoder == NULL || event == NULL) return CAVS_ERR_INVALID_ARGUMENT;
     memset(event, 0, sizeof(*event));
+    if (decoder->sequence_pending) {
+        decoder->sequence_pending = 0;
+        event->type = CAVS_EVENT_SEQUENCE;
+        event->sequence = decoder->sequence;
+        return CAVS_OK;
+    }
     if (decoder->end_pending) { decoder->end_pending = 0; event->type = CAVS_EVENT_END; return CAVS_OK; }
     return decoder->flushing ? CAVS_EOF : CAVS_AGAIN;
 }
@@ -70,7 +98,12 @@ cavs_result cavs_decoder_flush(cavs_decoder *decoder) {
 /* Restores a decoder to its initial input-accepting state. */
 cavs_result cavs_decoder_reset(cavs_decoder *decoder) {
     if (decoder == NULL) return CAVS_ERR_INVALID_ARGUMENT;
-    decoder->flushing = 0; decoder->end_pending = 0; return CAVS_OK;
+    decoder->flushing = 0;
+    decoder->end_pending = 0;
+    decoder->sequence_pending = 0;
+    decoder->has_sequence = 0;
+    memset(&decoder->sequence, 0, sizeof(decoder->sequence));
+    return CAVS_OK;
 }
 
 /* Releases the decoder through the allocator selected at creation. */
