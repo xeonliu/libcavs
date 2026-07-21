@@ -7,6 +7,7 @@
 #include <cavs/cavs.h>
 #include "coefficients.h"
 #include "macroblock.h"
+#include "reconstruction.h"
 #include <stddef.h>
 #include <stdint.h>
 #include <stdlib.h>
@@ -70,6 +71,25 @@ int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
         (void)cavs_decode_basic_coefficients_8x8(
             data, size * 8U, 0U,
             (cavs_basic_block_kind)(data[0] % 3U), &coefficients);
+    }
+    {
+        int32_t quant[64];
+        int32_t predicted[64];
+        int32_t matrix[64];
+        int16_t residual[64];
+        uint8_t weights[64];
+        unsigned index;
+        for (index = 0U; index < 64U; ++index) {
+            uint8_t byte = data[index % size];
+            quant[index] = (int32_t)(int8_t)byte;
+            predicted[index] = 0;
+            weights[index] = data[(index * 13U) % size];
+        }
+        (void)cavs_inverse_scan_8x8(
+            quant, (cavs_scan_mode_8x8)(data[0] & 1U), matrix);
+        (void)cavs_inverse_quantize_8x8(
+            matrix, predicted, weights, data[0] & 63U, quant);
+        (void)cavs_inverse_transform_8x8(quant, residual);
     }
     return 0;
 }

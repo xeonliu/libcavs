@@ -19,7 +19,8 @@ function(libcavs_enable_warnings target)
 endfunction()
 
 set(LIBCAVS_SOURCES src/decoder.c src/bitreader.c src/safe.c
-  src/pseudo_start_code.c src/syntax.c src/macroblock.c src/coefficients.c)
+  src/pseudo_start_code.c src/syntax.c src/macroblock.c src/coefficients.c
+  src/reconstruction.c)
 
 add_library(cavs_static STATIC ${LIBCAVS_SOURCES})
 add_library(cavs::static ALIAS cavs_static)
@@ -55,7 +56,8 @@ if(LIBCAVS_BUILD_TESTS)
   add_executable(cavs_unit tests/test_bitreader.c tests/test_syntax.c
     tests/test_macroblock.c src/bitreader.c src/safe.c
     tests/test_coefficients.c src/pseudo_start_code.c src/syntax.c
-    src/macroblock.c src/coefficients.c)
+    tests/test_reconstruction.c src/macroblock.c src/coefficients.c
+    src/reconstruction.c)
   target_include_directories(cavs_unit PRIVATE src include)
   target_compile_definitions(cavs_unit PRIVATE CAVS_TESTING)
   target_compile_features(cavs_unit PRIVATE c_std_99)
