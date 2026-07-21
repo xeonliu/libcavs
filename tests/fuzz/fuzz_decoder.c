@@ -131,6 +131,10 @@ int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
             reference_plane, 16U, 16U, 16U, 0U, 0U, 16U, 16U,
             (int8_t)data[0], (int8_t)data[size - 1U],
             reference_plane, 16U);
+        (void)cavs_interpolate_luma_block_eighth(
+            reference_plane, 16U, 16U, 16U, 0U, 0U, 16U, 16U,
+            (int8_t)data[size - 1U], (int8_t)data[0],
+            reference_plane, 16U);
     }
     return 0;
 }

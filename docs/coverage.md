@@ -15,7 +15,7 @@ outputs.
 | Macroblock and block syntax | partial | not-started | baseline YUV420 basic-entropy 8x8 macroblock headers, full Table 45 mapping, and coefficient blocks |
 | Basic/advanced entropy decoding | partial | not-started | baseline 8x8 basic entropy, Annex D Tables D.1-D.20, escape and inverse-run tests |
 | 4x4/8x8 inverse transform and quantization | partial | not-started | baseline 8x8 frame/field inverse scan, Table 70/71 inverse quantization, and T8 inverse transform; 4x4 and weighted modes pending |
-| Intra/inter prediction and compensation | partial | partial | baseline 8x8 intra path, luma quarter-sample and chroma 1/8/1/16 interpolation, edge replacement, and reconstruction; luma 1/8 interpolation, motion-vector derivation, and decoder integration pending |
+| Intra/inter prediction and compensation | partial | partial | baseline 8x8 intra path, all luma 1/4 and 1/8 phases, chroma 1/8/1/16 interpolation, edge replacement, and reconstruction; motion-vector derivation and decoder integration pending |
 | Loop filtering | not-started | not-started | - |
 | YUV420P8 progressive frame I/P/B | not-started | not-started | - |
 | YUV422P8, interlace, field pictures | not-started | not-started | - |

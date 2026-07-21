@@ -295,6 +295,149 @@ static void test_luma_invalid_atomic(void) {
                prediction, 1U) == CAVS_ERR_INVALID_ARGUMENT);
 }
 
+static void test_luma_all_eighth_phases(void) {
+    static const uint8_t expected[64] = {
+        41U, 34U, 55U, 39U, 50U, 65U, 90U, 99U,
+        36U, 51U, 58U, 64U, 66U, 89U, 107U, 125U,
+        59U, 60U, 87U, 81U, 97U, 110U, 127U, 147U,
+        45U, 68U, 83U, 97U, 107U, 131U, 149U, 168U,
+        58U, 72U, 100U, 109U, 133U, 156U, 165U, 194U,
+        75U, 97U, 116U, 135U, 159U, 169U, 184U, 199U,
+        102U, 117U, 135U, 155U, 169U, 186U, 181U, 208U,
+        113U, 137U, 157U, 176U, 200U, 203U, 210U, 217U
+    };
+    uint8_t plane[10U * 12U];
+    uint8_t prediction[1];
+    unsigned fraction_y;
+    fill_luma_pattern(plane, 10U, 10U, 12U);
+    for (fraction_y = 0U; fraction_y < 8U; ++fraction_y) {
+        unsigned fraction_x;
+        for (fraction_x = 0U; fraction_x < 8U; ++fraction_x) {
+            assert(cavs_interpolate_luma_block_eighth(
+                       plane, 10U, 10U, 12U, 4U, 4U, 1U, 1U,
+                       (int32_t)fraction_x, (int32_t)fraction_y,
+                       prediction, 1U) == CAVS_OK);
+            assert(prediction[0] == expected[fraction_y * 8U + fraction_x]);
+        }
+    }
+}
+
+static void test_luma_eighth_quarter_equivalence(void) {
+    uint8_t plane[10U * 10U];
+    uint8_t eighth[1];
+    uint8_t quarter[1];
+    int32_t motion_y;
+    fill_luma_pattern(plane, 10U, 10U, 10U);
+    for (motion_y = -6; motion_y <= 6; motion_y += 2) {
+        int32_t motion_x;
+        for (motion_x = -6; motion_x <= 6; motion_x += 2) {
+            assert(cavs_interpolate_luma_block_eighth(
+                       plane, 10U, 10U, 10U, 4U, 4U, 1U, 1U,
+                       motion_x, motion_y, eighth, 1U) == CAVS_OK);
+            assert(cavs_interpolate_luma_block_quarter(
+                       plane, 10U, 10U, 10U, 4U, 4U, 1U, 1U,
+                       motion_x / 2, motion_y / 2, quarter, 1U) == CAVS_OK);
+            assert(eighth[0] == quarter[0]);
+        }
+    }
+}
+
+static void test_luma_eighth_constant_and_clipping(void) {
+    uint8_t plane[8U * 8U];
+    uint8_t prediction[1];
+    unsigned fraction_y;
+    memset(plane, 123, sizeof(plane));
+    for (fraction_y = 0U; fraction_y < 8U; ++fraction_y) {
+        unsigned fraction_x;
+        for (fraction_x = 0U; fraction_x < 8U; ++fraction_x) {
+            assert(cavs_interpolate_luma_block_eighth(
+                       plane, 8U, 8U, 8U, 3U, 3U, 1U, 1U,
+                       (int32_t)fraction_x, (int32_t)fraction_y,
+                       prediction, 1U) == CAVS_OK);
+            assert(prediction[0] == 123U);
+        }
+    }
+
+    memset(plane, 0, sizeof(plane));
+    for (fraction_y = 0U; fraction_y < 8U; ++fraction_y)
+        plane[fraction_y * 8U + 2U] = 255U;
+    assert(cavs_interpolate_luma_block_eighth(
+               plane, 8U, 8U, 8U, 3U, 3U, 1U, 1U, 1, 0,
+               prediction, 1U) == CAVS_OK);
+    assert(prediction[0] == 0U);
+
+    memset(plane, 0, sizeof(plane));
+    for (fraction_y = 0U; fraction_y < 8U; ++fraction_y) {
+        plane[fraction_y * 8U + 3U] = 255U;
+        plane[fraction_y * 8U + 4U] = 255U;
+    }
+    assert(cavs_interpolate_luma_block_eighth(
+               plane, 8U, 8U, 8U, 3U, 3U, 1U, 1U, 1, 0,
+               prediction, 1U) == CAVS_OK);
+    assert(prediction[0] == 255U);
+}
+
+static void test_luma_eighth_block_and_stride(void) {
+    uint8_t plane[12U * 16U];
+    uint8_t prediction[8U * 10U];
+    size_t x;
+    size_t y;
+    fill_motion_plane(plane, 12U, 12U, 16U);
+    memset(prediction, 0xa5, sizeof(prediction));
+    assert(cavs_interpolate_luma_block_eighth(
+               plane, 12U, 12U, 16U, 2U, 2U, 8U, 8U, 8, 8,
+               prediction, 10U) == CAVS_OK);
+    for (y = 0U; y < 8U; ++y) {
+        for (x = 0U; x < 8U; ++x)
+            assert(prediction[y * 10U + x] ==
+                   plane[(y + 3U) * 16U + x + 3U]);
+        assert(prediction[y * 10U + 8U] == 0xa5U);
+        assert(prediction[y * 10U + 9U] == 0xa5U);
+    }
+}
+
+static void test_luma_eighth_negative_and_edges(void) {
+    uint8_t plane[10U * 10U];
+    uint8_t prediction[1];
+    fill_luma_pattern(plane, 10U, 10U, 10U);
+    assert(cavs_interpolate_luma_block_eighth(
+               plane, 10U, 10U, 10U, 0U, 0U, 1U, 1U, -1, -1,
+               prediction, 1U) == CAVS_OK);
+    assert(prediction[0] == 14U);
+    assert(cavs_interpolate_luma_block_eighth(
+               plane, 10U, 10U, 10U, 0U, 0U, 1U, 1U,
+               INT32_MIN, INT32_MIN, prediction, 1U) == CAVS_OK);
+    assert(prediction[0] == plane[0]);
+    assert(cavs_interpolate_luma_block_eighth(
+               plane, 10U, 10U, 10U, 9U, 9U, 1U, 1U,
+               INT32_MAX, INT32_MAX, prediction, 1U) == CAVS_OK);
+    assert(prediction[0] == plane[9U * 10U + 9U]);
+}
+
+static void test_luma_eighth_in_place_and_invalid(void) {
+    uint8_t plane[16U * 16U];
+    uint8_t original[16U * 16U];
+    uint8_t expected[16U * 16U];
+    uint8_t unchanged[16U * 16U];
+    fill_luma_pattern(plane, 16U, 16U, 16U);
+    memcpy(original, plane, sizeof(plane));
+    assert(cavs_interpolate_luma_block_eighth(
+               original, 16U, 16U, 16U, 0U, 0U, 16U, 16U, 3, 5,
+               expected, 16U) == CAVS_OK);
+    assert(cavs_interpolate_luma_block_eighth(
+               plane, 16U, 16U, 16U, 0U, 0U, 16U, 16U, 3, 5,
+               plane, 16U) == CAVS_OK);
+    assert(memcmp(plane, expected, sizeof(plane)) == 0);
+    memcpy(unchanged, plane, sizeof(plane));
+    assert(cavs_interpolate_luma_block_eighth(
+               plane, 16U, 16U, 16U, 0U, 0U, 0U, 16U, 0, 0,
+               plane, 16U) == CAVS_ERR_INVALID_ARGUMENT);
+    assert(memcmp(plane, unchanged, sizeof(plane)) == 0);
+    assert(cavs_interpolate_luma_block_eighth(
+               NULL, 16U, 16U, 16U, 0U, 0U, 1U, 1U, 0, 0,
+               plane, 16U) == CAVS_ERR_INVALID_ARGUMENT);
+}
+
 void test_motion(void) {
     test_chroma_motion_derivation();
     test_chroma_integer_and_stride();
@@ -309,4 +452,10 @@ void test_motion(void) {
     test_luma_negative_and_edges();
     test_luma_in_place();
     test_luma_invalid_atomic();
+    test_luma_all_eighth_phases();
+    test_luma_eighth_quarter_equivalence();
+    test_luma_eighth_constant_and_clipping();
+    test_luma_eighth_block_and_stride();
+    test_luma_eighth_negative_and_edges();
+    test_luma_eighth_in_place_and_invalid();
 }

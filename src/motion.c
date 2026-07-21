@@ -252,6 +252,87 @@ static uint8_t luma_quarter_sample(const cavs_luma_source *source,
         64, 7U);
 }
 
+static int32_t half_grid_anchor(int32_t index) {
+    int32_t anchor = index / 2;
+    if (index < 0 && index % 2 != 0) --anchor;
+    return anchor;
+}
+
+/* Returns an unrounded half-sample-grid value scaled by 64. */
+static int32_t luma_half_grid64(const cavs_luma_source *source,
+                                int32_t grid_x, int32_t grid_y) {
+    int odd_x = grid_x % 2 != 0;
+    int odd_y = grid_y % 2 != 0;
+    int32_t anchor_x = half_grid_anchor(grid_x);
+    int32_t anchor_y = half_grid_anchor(grid_y);
+    if (!odd_x && !odd_y)
+        return 64 * luma_integer(source, anchor_x, anchor_y);
+    if (odd_x && !odd_y)
+        return 8 * luma_horizontal_half(source, anchor_x, anchor_y);
+    if (!odd_x && odd_y)
+        return 8 * luma_vertical_half(source, anchor_x, anchor_y);
+    return luma_half_half(source, anchor_x, anchor_y);
+}
+
+static uint8_t luma_eighth_axis_sample(const cavs_luma_source *source,
+                                        uint32_t fraction,
+                                        uint32_t fixed_fraction,
+                                        int horizontal) {
+    static const int8_t filters[2][4] = {
+        {-6, 56, 15, -1},
+        {-1, 15, 56, -6}
+    };
+    const int8_t *filter = filters[fraction % 4U == 1U ? 0 : 1];
+    int32_t segment = (int32_t)(fraction / 4U);
+    int32_t fixed = (int32_t)(fixed_fraction / 4U);
+    int32_t sum = 0;
+    unsigned index;
+    for (index = 0U; index < 4U; ++index) {
+        int32_t varying = segment + (int32_t)index - 1;
+        int32_t value = horizontal
+                            ? luma_half_grid64(source, varying, fixed)
+                            : luma_half_grid64(source, fixed, varying);
+        sum += filter[index] * value;
+    }
+    return rounded_luma(sum, 2048, 12U);
+}
+
+static uint8_t luma_eighth_interior_sample(const cavs_luma_source *source,
+                                            uint32_t fraction_x,
+                                            uint32_t fraction_y) {
+    uint32_t cell_x = fraction_x / 4U;
+    uint32_t cell_y = fraction_y / 4U;
+    uint32_t local_x = fraction_x % 4U;
+    uint32_t local_y = fraction_y % 4U;
+    int32_t top_left = luma_half_grid64(
+        source, (int32_t)cell_x, (int32_t)cell_y);
+    int32_t top_right = luma_half_grid64(
+        source, (int32_t)cell_x + 1, (int32_t)cell_y);
+    int32_t bottom_left = luma_half_grid64(
+        source, (int32_t)cell_x, (int32_t)cell_y + 1);
+    int32_t bottom_right = luma_half_grid64(
+        source, (int32_t)cell_x + 1, (int32_t)cell_y + 1);
+    int32_t sum = (int32_t)((4U - local_x) * (4U - local_y)) * top_left +
+                  (int32_t)(local_x * (4U - local_y)) * top_right +
+                  (int32_t)((4U - local_x) * local_y) * bottom_left +
+                  (int32_t)(local_x * local_y) * bottom_right;
+    return rounded_luma(sum, 512, 10U);
+}
+
+static uint8_t luma_eighth_sample(const cavs_luma_source *source,
+                                  uint32_t fraction_x,
+                                  uint32_t fraction_y) {
+    if (fraction_x % 2U == 0U && fraction_y % 2U == 0U)
+        return luma_quarter_sample(source, fraction_x / 2U, fraction_y / 2U);
+    if (fraction_x % 2U != 0U && fraction_y % 4U == 0U)
+        return luma_eighth_axis_sample(
+            source, fraction_x, fraction_y, 1);
+    if (fraction_y % 2U != 0U && fraction_x % 4U == 0U)
+        return luma_eighth_axis_sample(
+            source, fraction_y, fraction_x, 0);
+    return luma_eighth_interior_sample(source, fraction_x, fraction_y);
+}
+
 cavs_result cavs_interpolate_luma_block_quarter(
     const uint8_t *plane, size_t width, size_t height, size_t stride,
     size_t x0, size_t y0, size_t block_width, size_t block_height,
@@ -280,6 +361,43 @@ cavs_result cavs_interpolate_luma_block_quarter(
             source.base_x = x0 + x;
             parsed[y * CAVS_MAX_MOTION_BLOCK_DIMENSION + x] =
                 luma_quarter_sample(&source, fraction_x, fraction_y);
+        }
+    }
+    for (y = 0U; y < block_height; ++y)
+        for (x = 0U; x < block_width; ++x)
+            prediction[y * prediction_stride + x] =
+                parsed[y * CAVS_MAX_MOTION_BLOCK_DIMENSION + x];
+    return CAVS_OK;
+}
+
+cavs_result cavs_interpolate_luma_block_eighth(
+    const uint8_t *plane, size_t width, size_t height, size_t stride,
+    size_t x0, size_t y0, size_t block_width, size_t block_height,
+    int32_t motion_x, int32_t motion_y,
+    uint8_t *prediction, size_t prediction_stride) {
+    uint8_t parsed[CAVS_MAX_MOTION_BLOCK_DIMENSION *
+                   CAVS_MAX_MOTION_BLOCK_DIMENSION];
+    cavs_luma_source source;
+    uint32_t fraction_x;
+    uint32_t fraction_y;
+    size_t x;
+    size_t y;
+    if (!block_arguments_valid(
+            plane, width, height, stride, x0, y0, block_width, block_height,
+            prediction, prediction_stride))
+        return CAVS_ERR_INVALID_ARGUMENT;
+    source.plane = plane;
+    source.width = width;
+    source.height = height;
+    source.stride = stride;
+    split_motion(motion_x, 8, &source.integer_x, &fraction_x);
+    split_motion(motion_y, 8, &source.integer_y, &fraction_y);
+    for (y = 0U; y < block_height; ++y) {
+        source.base_y = y0 + y;
+        for (x = 0U; x < block_width; ++x) {
+            source.base_x = x0 + x;
+            parsed[y * CAVS_MAX_MOTION_BLOCK_DIMENSION + x] =
+                luma_eighth_sample(&source, fraction_x, fraction_y);
         }
     }
     for (y = 0U; y < block_height; ++y)
