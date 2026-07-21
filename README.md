@@ -19,3 +19,14 @@ ctest --test-dir build --output-on-failure
 See `docs/coverage.md` for implementation status and `CONTRIBUTING.md` for the
 source-control rules that apply to this independent rewrite.
 
+The public decoder API has opt-in fuzz targets. Use Clang for libFuzzer:
+
+```sh
+cmake -S . -B build-fuzz -DLIBCAVS_BUILD_TESTS=OFF \
+  -DLIBCAVS_BUILD_SHARED=OFF -DLIBCAVS_BUILD_FUZZER=ON
+cmake --build build-fuzz
+```
+
+For AFL, configure with an AFL compiler and
+`-DLIBCAVS_BUILD_AFL_FUZZER=ON`; the `cavs_afl_decoder` target reads one test
+case from standard input.

@@ -47,6 +47,50 @@ static void make_sequence_nal(uint8_t data[18]) {
     assert(position == 18U * 8U);
 }
 
+/* Creates a progressive baseline I-picture header for decoder dispatch. */
+static void make_i_picture_nal(uint8_t data[10]) {
+    size_t position = 32U;
+    memset(data, 0, 10U);
+    data[2] = 1U;
+    data[3] = UINT8_C(0xb3);
+    append_bits(data, &position, UINT32_C(0xffff), 16U);
+    append_bits(data, &position, 0U, 1U);
+    append_bits(data, &position, 1U, 1U);
+    append_bits(data, &position, 2U, 8U);
+    append_bits(data, &position, 1U, 1U);
+    append_bits(data, &position, 1U, 1U);
+    append_bits(data, &position, 0U, 1U);
+    append_bits(data, &position, 0U, 1U);
+    append_bits(data, &position, 1U, 1U);
+    append_bits(data, &position, 20U, 6U);
+    append_bits(data, &position, 0U, 4U);
+    append_bits(data, &position, 1U, 1U);
+    assert(position == 74U);
+}
+
+/* Creates a progressive baseline P-picture header for decoder dispatch. */
+static void make_pb_picture_nal(uint8_t data[10]) {
+    size_t position = 32U;
+    memset(data, 0, 10U);
+    data[2] = 1U;
+    data[3] = UINT8_C(0xb6);
+    append_bits(data, &position, 40U, 16U);
+    append_bits(data, &position, 1U, 2U);
+    append_bits(data, &position, 3U, 8U);
+    append_bits(data, &position, 1U, 1U);
+    append_bits(data, &position, 1U, 1U);
+    append_bits(data, &position, 0U, 1U);
+    append_bits(data, &position, 0U, 1U);
+    append_bits(data, &position, 1U, 1U);
+    append_bits(data, &position, 18U, 6U);
+    append_bits(data, &position, 0U, 1U);
+    append_bits(data, &position, 0U, 1U);
+    append_bits(data, &position, 0U, 3U);
+    append_bits(data, &position, 1U, 1U);
+    append_bits(data, &position, 1U, 1U);
+    assert(position == 76U);
+}
+
 /* Verifies argument validation, drain behavior, and reset behavior. */
 int main(void) {
     static const uint8_t picture_prefix[] = { 0, 0, 1, 0xb3 };
@@ -54,6 +98,8 @@ int main(void) {
     static const uint8_t user_data[] = { 0, 0, 1, 0xb2, 'a', 'v', 's' };
     static const uint8_t extension[] = { 0, 0, 1, 0xb5, 0x91, 0x27 };
     uint8_t sequence_nal[18];
+    uint8_t i_picture_nal[10];
+    uint8_t pb_picture_nal[10];
     cavs_decoder *decoder = NULL;
     cavs_decoder_config bad_config = { 0 };
     cavs_packet packet = { picture_prefix, sizeof(picture_prefix), 1, 2, NULL };
@@ -64,7 +110,7 @@ int main(void) {
     assert(cavs_decoder_create(&bad_config, &decoder) == CAVS_ERR_INVALID_ARGUMENT);
     assert(cavs_decoder_create(NULL, &decoder) == CAVS_OK);
     assert(cavs_decoder_receive_event(decoder, &event) == CAVS_AGAIN);
-    assert(cavs_decoder_send_nal(decoder, &packet) == CAVS_ERR_UNSUPPORTED_PROFILE);
+    assert(cavs_decoder_send_nal(decoder, &packet) == CAVS_ERR_INVALID_STATE);
     make_sequence_nal(sequence_nal);
     packet.data = sequence_nal;
     packet.size = sizeof(sequence_nal);
@@ -73,6 +119,20 @@ int main(void) {
     assert(event.type == CAVS_EVENT_SEQUENCE);
     assert(event.sequence.profile_id == UINT8_C(0x20));
     assert(event.sequence.display_width == 720U && event.sequence.display_height == 576U);
+    make_i_picture_nal(i_picture_nal);
+    packet.data = i_picture_nal;
+    packet.size = sizeof(i_picture_nal);
+    packet.pts = 101;
+    packet.dts = 99;
+    assert(cavs_decoder_send_nal(decoder, &packet) == CAVS_OK);
+    assert(cavs_decoder_receive_event(decoder, &event) == CAVS_AGAIN);
+    make_pb_picture_nal(pb_picture_nal);
+    packet.data = pb_picture_nal;
+    packet.size = sizeof(pb_picture_nal);
+    assert(cavs_decoder_send_nal(decoder, &packet) == CAVS_OK);
+    assert(cavs_decoder_receive_event(decoder, &event) == CAVS_AGAIN);
+    packet.data = sequence_nal;
+    packet.size = sizeof(sequence_nal);
     assert(cavs_decoder_send_nal(decoder, &packet) == CAVS_OK);
     assert(cavs_decoder_receive_event(decoder, &event) == CAVS_AGAIN);
     packet.data = user_data;

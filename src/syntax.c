@@ -15,6 +15,25 @@ static int read_field(cavs_bitreader *reader, unsigned width, uint32_t *value) {
     return cavs_br_read(reader, width, value);
 }
 
+/* Reads a signed syntax value and enforces its normative closed range. */
+static int read_signed_range(cavs_bitreader *reader, int32_t minimum,
+                             int32_t maximum, int8_t *value) {
+    int32_t parsed;
+    if (!cavs_br_read_se(reader, &parsed) || parsed < minimum || parsed > maximum)
+        return 0;
+    *value = (int8_t)parsed;
+    return 1;
+}
+
+/* Validates the component ranges in the 24-bit time code from Table 39. */
+static int is_valid_time_code(uint32_t time_code) {
+    uint32_t hours = (time_code >> 18) & UINT32_C(0x1f);
+    uint32_t minutes = (time_code >> 12) & UINT32_C(0x3f);
+    uint32_t seconds = (time_code >> 6) & UINT32_C(0x3f);
+    uint32_t pictures = time_code & UINT32_C(0x3f);
+    return hours <= 23U && minutes <= 59U && seconds <= 59U && pictures <= 59U;
+}
+
 /* Validates profile-specific level identifiers listed by normative Annex B. */
 static int is_supported_level(uint8_t profile_id, uint8_t level_id) {
     switch (level_id) {
@@ -106,5 +125,255 @@ cavs_result cavs_parse_sequence_header(const uint8_t *data, size_t size,
     if (!read_field(&reader, 3U, &value)) return CAVS_ERR_CORRUPT_BITSTREAM;
 
     *sequence = parsed;
+    return CAVS_OK;
+}
+
+/*
+ * Parses GB/T 20090.2-2013, 信息技术 先进音视频编码 第2部分: 视频,
+ * 7.3.1 Table 21 and the corresponding GB/T 20090.16-2016 Table 21.
+ */
+cavs_result cavs_parse_i_picture_header(const uint8_t *data, size_t bit_size,
+                                        const cavs_sequence_info *sequence,
+                                        cavs_i_picture_header *picture) {
+    cavs_bitreader reader;
+    cavs_i_picture_header parsed;
+    uint32_t value;
+    unsigned index;
+    if ((data == NULL && bit_size != 0U) || sequence == NULL || picture == NULL)
+        return CAVS_ERR_INVALID_ARGUMENT;
+    if (sequence->profile_id != UINT8_C(0x20) &&
+        sequence->profile_id != UINT8_C(0x48))
+        return CAVS_ERR_UNSUPPORTED_PROFILE;
+    if (!cavs_br_init_bits(&reader, data, bit_size))
+        return CAVS_ERR_INVALID_ARGUMENT;
+    memset(&parsed, 0, sizeof(parsed));
+    parsed.picture_structure = 1U;
+
+    if (!read_field(&reader, 16U, &value)) return CAVS_ERR_CORRUPT_BITSTREAM;
+    parsed.bbv_delay = value;
+    if (sequence->profile_id == UINT8_C(0x48)) {
+        if (!read_field(&reader, 1U, &value) || value != 1U ||
+            !read_field(&reader, 7U, &value))
+            return CAVS_ERR_CORRUPT_BITSTREAM;
+        parsed.bbv_delay = (parsed.bbv_delay << 7) | value;
+    }
+    if (!read_field(&reader, 1U, &value)) return CAVS_ERR_CORRUPT_BITSTREAM;
+    parsed.has_time_code = (uint8_t)value;
+    if (parsed.has_time_code != 0U) {
+        if (!read_field(&reader, 24U, &parsed.time_code) ||
+            !is_valid_time_code(parsed.time_code))
+            return CAVS_ERR_CORRUPT_BITSTREAM;
+    }
+    if (!read_field(&reader, 1U, &value) || value != 1U ||
+        !read_field(&reader, 8U, &value))
+        return CAVS_ERR_CORRUPT_BITSTREAM;
+    parsed.picture_distance = (uint8_t)value;
+    if (sequence->low_delay != 0U &&
+        !cavs_br_read_ue(&reader, &parsed.bbv_check_times))
+        return CAVS_ERR_CORRUPT_BITSTREAM;
+    if (!read_field(&reader, 1U, &value)) return CAVS_ERR_CORRUPT_BITSTREAM;
+    parsed.progressive_frame = (uint8_t)value;
+    if (parsed.progressive_frame == 0U) {
+        if (!read_field(&reader, 1U, &value)) return CAVS_ERR_CORRUPT_BITSTREAM;
+        parsed.picture_structure = (uint8_t)value;
+    }
+    if (sequence->progressive_sequence != 0U && parsed.progressive_frame == 0U)
+        return CAVS_ERR_CORRUPT_BITSTREAM;
+    if (!read_field(&reader, 1U, &value)) return CAVS_ERR_CORRUPT_BITSTREAM;
+    parsed.top_field_first = (uint8_t)value;
+    if (!read_field(&reader, 1U, &value)) return CAVS_ERR_CORRUPT_BITSTREAM;
+    parsed.repeat_first_field = (uint8_t)value;
+    if (parsed.progressive_frame == 0U && parsed.repeat_first_field != 0U)
+        return CAVS_ERR_CORRUPT_BITSTREAM;
+    if (!read_field(&reader, 1U, &value)) return CAVS_ERR_CORRUPT_BITSTREAM;
+    parsed.fixed_picture_qp = (uint8_t)value;
+    if (!read_field(&reader, 6U, &value)) return CAVS_ERR_CORRUPT_BITSTREAM;
+    parsed.picture_qp = (uint8_t)value;
+    if (parsed.progressive_frame == 0U && parsed.picture_structure == 0U) {
+        if (!read_field(&reader, 1U, &value)) return CAVS_ERR_CORRUPT_BITSTREAM;
+        parsed.skip_mode_flag = (uint8_t)value;
+    }
+    if (!read_field(&reader, 4U, &value) || value != 0U)
+        return CAVS_ERR_CORRUPT_BITSTREAM;
+    if (!read_field(&reader, 1U, &value)) return CAVS_ERR_CORRUPT_BITSTREAM;
+    parsed.loop_filter_disable = (uint8_t)value;
+    if (parsed.loop_filter_disable == 0U) {
+        if (!read_field(&reader, 1U, &value)) return CAVS_ERR_CORRUPT_BITSTREAM;
+        parsed.loop_filter_parameter_flag = (uint8_t)value;
+        if (parsed.loop_filter_parameter_flag != 0U &&
+            (!read_signed_range(&reader, -8, 8, &parsed.alpha_c_offset) ||
+             !read_signed_range(&reader, -8, 8, &parsed.beta_offset)))
+            return CAVS_ERR_CORRUPT_BITSTREAM;
+    }
+
+    if (sequence->profile_id == UINT8_C(0x48)) {
+        if (!read_field(&reader, 1U, &value)) return CAVS_ERR_CORRUPT_BITSTREAM;
+        parsed.weighting_quant_flag = (uint8_t)value;
+        if (parsed.weighting_quant_flag != 0U) {
+            if (!read_field(&reader, 1U, &value) || value != 0U ||
+                !read_field(&reader, 1U, &value))
+                return CAVS_ERR_CORRUPT_BITSTREAM;
+            parsed.chroma_quant_parameter_disable = (uint8_t)value;
+            if (parsed.chroma_quant_parameter_disable == 0U &&
+                (!read_signed_range(&reader, -16, 16,
+                                    &parsed.chroma_quant_parameter_delta_cb) ||
+                 !read_signed_range(&reader, -16, 16,
+                                    &parsed.chroma_quant_parameter_delta_cr)))
+                return CAVS_ERR_CORRUPT_BITSTREAM;
+            if (!read_field(&reader, 2U, &value) || value == 3U)
+                return CAVS_ERR_CORRUPT_BITSTREAM;
+            parsed.weighting_quant_parameter_index = (uint8_t)value;
+            if (!read_field(&reader, 2U, &value) || value == 3U)
+                return CAVS_ERR_CORRUPT_BITSTREAM;
+            parsed.weighting_quant_model = (uint8_t)value;
+            if (parsed.weighting_quant_parameter_index == 1U) {
+                for (index = 0; index < 6U; ++index) {
+                    if (!read_signed_range(&reader, -128, 127,
+                                           &parsed.weighting_quant_parameter_delta1[index]))
+                        return CAVS_ERR_CORRUPT_BITSTREAM;
+                }
+            } else if (parsed.weighting_quant_parameter_index == 2U) {
+                for (index = 0; index < 6U; ++index) {
+                    if (!read_signed_range(&reader, -128, 127,
+                                           &parsed.weighting_quant_parameter_delta2[index]))
+                        return CAVS_ERR_CORRUPT_BITSTREAM;
+                }
+            }
+        }
+        if (!read_field(&reader, 1U, &value)) return CAVS_ERR_CORRUPT_BITSTREAM;
+        parsed.advanced_entropy_enabled = (uint8_t)value;
+    }
+
+    *picture = parsed;
+    return CAVS_OK;
+}
+
+/*
+ * Parses GB/T 20090.2-2013, 信息技术 先进音视频编码 第2部分: 视频,
+ * 7.3.2 Table 22 and the corresponding GB/T 20090.16-2016 Table 22.
+ */
+cavs_result cavs_parse_pb_picture_header(const uint8_t *data, size_t bit_size,
+                                         const cavs_sequence_info *sequence,
+                                         cavs_pb_picture_header *picture) {
+    cavs_bitreader reader;
+    cavs_pb_picture_header parsed;
+    uint32_t value;
+    unsigned index;
+    if ((data == NULL && bit_size != 0U) || sequence == NULL || picture == NULL)
+        return CAVS_ERR_INVALID_ARGUMENT;
+    if (sequence->profile_id != UINT8_C(0x20) &&
+        sequence->profile_id != UINT8_C(0x48))
+        return CAVS_ERR_UNSUPPORTED_PROFILE;
+    if (!cavs_br_init_bits(&reader, data, bit_size))
+        return CAVS_ERR_INVALID_ARGUMENT;
+    memset(&parsed, 0, sizeof(parsed));
+    parsed.picture_structure = 1U;
+    parsed.picture_reference_flag = 1U;
+
+    if (!read_field(&reader, 16U, &value)) return CAVS_ERR_CORRUPT_BITSTREAM;
+    parsed.bbv_delay = value;
+    if (sequence->profile_id == UINT8_C(0x48)) {
+        if (!read_field(&reader, 1U, &value) || value != 1U ||
+            !read_field(&reader, 7U, &value))
+            return CAVS_ERR_CORRUPT_BITSTREAM;
+        parsed.bbv_delay = (parsed.bbv_delay << 7) | value;
+    }
+    if (!read_field(&reader, 2U, &value) || value == 0U || value == 3U)
+        return CAVS_ERR_CORRUPT_BITSTREAM;
+    parsed.picture_coding_type = (uint8_t)value;
+    if (!read_field(&reader, 8U, &value)) return CAVS_ERR_CORRUPT_BITSTREAM;
+    parsed.picture_distance = (uint8_t)value;
+    if (sequence->low_delay != 0U &&
+        !cavs_br_read_ue(&reader, &parsed.bbv_check_times))
+        return CAVS_ERR_CORRUPT_BITSTREAM;
+    if (!read_field(&reader, 1U, &value)) return CAVS_ERR_CORRUPT_BITSTREAM;
+    parsed.progressive_frame = (uint8_t)value;
+    if (parsed.progressive_frame == 0U) {
+        if (!read_field(&reader, 1U, &value)) return CAVS_ERR_CORRUPT_BITSTREAM;
+        parsed.picture_structure = (uint8_t)value;
+        if (parsed.picture_structure == 0U) {
+            if (!read_field(&reader, 1U, &value) || value != 1U)
+                return CAVS_ERR_CORRUPT_BITSTREAM;
+            parsed.advanced_prediction_mode_disable = (uint8_t)value;
+        }
+    }
+    if (sequence->progressive_sequence != 0U && parsed.progressive_frame == 0U)
+        return CAVS_ERR_CORRUPT_BITSTREAM;
+    if (!read_field(&reader, 1U, &value)) return CAVS_ERR_CORRUPT_BITSTREAM;
+    parsed.top_field_first = (uint8_t)value;
+    if (!read_field(&reader, 1U, &value)) return CAVS_ERR_CORRUPT_BITSTREAM;
+    parsed.repeat_first_field = (uint8_t)value;
+    if (parsed.progressive_frame == 0U && parsed.repeat_first_field != 0U)
+        return CAVS_ERR_CORRUPT_BITSTREAM;
+    if (!read_field(&reader, 1U, &value)) return CAVS_ERR_CORRUPT_BITSTREAM;
+    parsed.fixed_picture_qp = (uint8_t)value;
+    if (!read_field(&reader, 6U, &value)) return CAVS_ERR_CORRUPT_BITSTREAM;
+    parsed.picture_qp = (uint8_t)value;
+    if (!(parsed.picture_coding_type == 2U && parsed.picture_structure == 1U)) {
+        if (!read_field(&reader, 1U, &value)) return CAVS_ERR_CORRUPT_BITSTREAM;
+        parsed.picture_reference_flag = (uint8_t)value;
+    }
+    if (!read_field(&reader, 1U, &value)) return CAVS_ERR_CORRUPT_BITSTREAM;
+    parsed.no_forward_reference_flag = (uint8_t)value;
+    if (sequence->profile_id == UINT8_C(0x48)) {
+        if (!read_field(&reader, 1U, &value)) return CAVS_ERR_CORRUPT_BITSTREAM;
+        parsed.pb_field_enhanced_flag = (uint8_t)value;
+        if (!read_field(&reader, 2U, &value) || value != 0U)
+            return CAVS_ERR_CORRUPT_BITSTREAM;
+    } else if (!read_field(&reader, 3U, &value) || value != 0U) {
+        return CAVS_ERR_CORRUPT_BITSTREAM;
+    }
+    if (!read_field(&reader, 1U, &value)) return CAVS_ERR_CORRUPT_BITSTREAM;
+    parsed.skip_mode_flag = (uint8_t)value;
+    if (!read_field(&reader, 1U, &value)) return CAVS_ERR_CORRUPT_BITSTREAM;
+    parsed.loop_filter_disable = (uint8_t)value;
+    if (parsed.loop_filter_disable == 0U) {
+        if (!read_field(&reader, 1U, &value)) return CAVS_ERR_CORRUPT_BITSTREAM;
+        parsed.loop_filter_parameter_flag = (uint8_t)value;
+        if (parsed.loop_filter_parameter_flag != 0U &&
+            (!read_signed_range(&reader, -8, 8, &parsed.alpha_c_offset) ||
+             !read_signed_range(&reader, -8, 8, &parsed.beta_offset)))
+            return CAVS_ERR_CORRUPT_BITSTREAM;
+    }
+
+    if (sequence->profile_id == UINT8_C(0x48)) {
+        if (!read_field(&reader, 1U, &value)) return CAVS_ERR_CORRUPT_BITSTREAM;
+        parsed.weighting_quant_flag = (uint8_t)value;
+        if (parsed.weighting_quant_flag != 0U) {
+            if (!read_field(&reader, 1U, &value) || value != 0U ||
+                !read_field(&reader, 1U, &value))
+                return CAVS_ERR_CORRUPT_BITSTREAM;
+            parsed.chroma_quant_parameter_disable = (uint8_t)value;
+            if (parsed.chroma_quant_parameter_disable == 0U &&
+                (!read_signed_range(&reader, -16, 16,
+                                    &parsed.chroma_quant_parameter_delta_cb) ||
+                 !read_signed_range(&reader, -16, 16,
+                                    &parsed.chroma_quant_parameter_delta_cr)))
+                return CAVS_ERR_CORRUPT_BITSTREAM;
+            if (!read_field(&reader, 2U, &value) || value == 3U)
+                return CAVS_ERR_CORRUPT_BITSTREAM;
+            parsed.weighting_quant_parameter_index = (uint8_t)value;
+            if (!read_field(&reader, 2U, &value) || value == 3U)
+                return CAVS_ERR_CORRUPT_BITSTREAM;
+            parsed.weighting_quant_model = (uint8_t)value;
+            if (parsed.weighting_quant_parameter_index == 1U) {
+                for (index = 0; index < 6U; ++index) {
+                    if (!read_signed_range(&reader, -128, 127,
+                                           &parsed.weighting_quant_parameter_delta1[index]))
+                        return CAVS_ERR_CORRUPT_BITSTREAM;
+                }
+            } else if (parsed.weighting_quant_parameter_index == 2U) {
+                for (index = 0; index < 6U; ++index) {
+                    if (!read_signed_range(&reader, -128, 127,
+                                           &parsed.weighting_quant_parameter_delta2[index]))
+                        return CAVS_ERR_CORRUPT_BITSTREAM;
+                }
+            }
+        }
+        if (!read_field(&reader, 1U, &value)) return CAVS_ERR_CORRUPT_BITSTREAM;
+        parsed.advanced_entropy_enabled = (uint8_t)value;
+    }
+
+    *picture = parsed;
     return CAVS_OK;
 }

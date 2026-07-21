@@ -6,12 +6,17 @@ include(CMakePackageConfigHelpers)
 
 option(LIBCAVS_BUILD_SHARED "Build the shared library" ON)
 option(LIBCAVS_BUILD_TESTS "Build unit tests" ON)
+option(LIBCAVS_BUILD_FUZZER "Build the Clang libFuzzer decoder target" OFF)
+option(LIBCAVS_BUILD_AFL_FUZZER "Build the standalone AFL decoder target" OFF)
 
 set(LIBCAVS_SOURCES src/decoder.c src/bitreader.c src/safe.c src/pseudo_start_code.c src/syntax.c)
 
 add_library(cavs_static STATIC ${LIBCAVS_SOURCES})
 add_library(cavs::static ALIAS cavs_static)
-set_target_properties(cavs_static PROPERTIES OUTPUT_NAME cavs C_VISIBILITY_PRESET hidden)
+set_target_properties(cavs_static PROPERTIES
+  OUTPUT_NAME cavs
+  EXPORT_NAME static
+  C_VISIBILITY_PRESET hidden)
 target_include_directories(cavs_static PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
   $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>)
@@ -20,7 +25,12 @@ target_compile_features(cavs_static PUBLIC c_std_99)
 if(LIBCAVS_BUILD_SHARED)
   add_library(cavs_shared SHARED ${LIBCAVS_SOURCES})
   add_library(cavs::shared ALIAS cavs_shared)
-  set_target_properties(cavs_shared PROPERTIES OUTPUT_NAME cavs C_VISIBILITY_PRESET hidden VERSION ${PROJECT_VERSION} SOVERSION 0)
+  set_target_properties(cavs_shared PROPERTIES
+    OUTPUT_NAME cavs
+    EXPORT_NAME shared
+    C_VISIBILITY_PRESET hidden
+    VERSION ${PROJECT_VERSION}
+    SOVERSION 0)
   target_compile_definitions(cavs_shared PRIVATE CAVS_BUILDING_DLL)
   target_include_directories(cavs_shared PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
@@ -51,6 +61,25 @@ if(LIBCAVS_BUILD_TESTS)
   target_link_libraries(cavs_api_test PRIVATE cavs_static)
   target_compile_features(cavs_api_test PRIVATE c_std_99)
   add_test(NAME cavs_api_test COMMAND cavs_api_test)
+endif()
+
+if(LIBCAVS_BUILD_FUZZER)
+  if(NOT CMAKE_C_COMPILER_ID MATCHES "Clang")
+    message(FATAL_ERROR "LIBCAVS_BUILD_FUZZER requires Clang with libFuzzer")
+  endif()
+  add_executable(cavs_fuzz_decoder tests/fuzz/fuzz_decoder.c)
+  target_link_libraries(cavs_fuzz_decoder PRIVATE cavs_static)
+  target_compile_features(cavs_fuzz_decoder PRIVATE c_std_99)
+  target_compile_options(cavs_static PRIVATE -fsanitize=fuzzer-no-link,address,undefined)
+  target_compile_options(cavs_fuzz_decoder PRIVATE -fsanitize=fuzzer,address,undefined)
+  target_link_options(cavs_fuzz_decoder PRIVATE -fsanitize=fuzzer,address,undefined)
+endif()
+
+if(LIBCAVS_BUILD_AFL_FUZZER)
+  add_executable(cavs_afl_decoder tests/fuzz/fuzz_decoder.c)
+  target_link_libraries(cavs_afl_decoder PRIVATE cavs_static)
+  target_compile_features(cavs_afl_decoder PRIVATE c_std_99)
+  target_compile_definitions(cavs_afl_decoder PRIVATE CAVS_AFL_STANDALONE)
 endif()
 
 install(FILES include/cavs/cavs.h DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/cavs)
