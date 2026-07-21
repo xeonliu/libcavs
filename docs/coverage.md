@@ -12,8 +12,8 @@ outputs.
 | Sequence header syntax and change events | partial | partial | `cavs_unit`, `cavs_api_test` |
 | Level identifier and profile-format constraints | partial | partial | identifier tests; level maxima pending |
 | Extension, picture, slice syntax | partial | partial | I/PB picture and target-profile slice header parsers; macroblocks pending |
-| Macroblock and block syntax | partial | not-started | baseline YUV420 basic-entropy 8x8 macroblock headers and full Table 45 mapping; coefficient blocks pending |
-| Basic/advanced entropy decoding | not-started | not-started | - |
+| Macroblock and block syntax | partial | not-started | baseline YUV420 basic-entropy 8x8 macroblock headers, full Table 45 mapping, and coefficient blocks |
+| Basic/advanced entropy decoding | partial | not-started | baseline 8x8 basic entropy, Annex D Tables D.1-D.20, escape and inverse-run tests |
 | 4x4/8x8 inverse transform and quantization | not-started | not-started | - |
 | Intra/inter prediction and compensation | not-started | not-started | - |
 | Loop filtering | not-started | not-started | - |
@@ -23,7 +23,7 @@ outputs.
 | Metadata and unknown extension retention | partial | partial | copied user-data and raw-extension API events; known metadata parsing pending |
 | BBV validation tooling | not-started | not-started | - |
 | `cavsdec` input, output, frame limit, and logging | partial | partial | file/stdin Annex-B scan and planar-output path; frame reconstruction pending |
-| Random-input robustness | partial | partial | libFuzzer/AFL public API and baseline macroblock harness; 1,000-run sanitizer smoke test |
+| Random-input robustness | partial | partial | libFuzzer/AFL public API, baseline macroblock, and coefficient harnesses; 1,000-run sanitizer smoke test |
 
 No profile is currently advertised as decodable. Version 1.0 is blocked until
 every applicable row is conformant and the release gates in `CONTRIBUTING.md`
