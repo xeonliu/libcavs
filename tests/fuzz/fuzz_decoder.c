@@ -89,6 +89,7 @@ int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
         cavs_motion_vector predicted_motion = {0, 0};
         cavs_motion_vector difference_motion;
         cavs_motion_vector decoded_motion;
+        cavs_bidirectional_motion bidirectional_motion;
         uint8_t weights[64];
         unsigned index;
         for (index = 0U; index < 64U; ++index) {
@@ -140,6 +141,28 @@ int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
             data[0] & 1U ? CAVS_LUMA_MOTION_QUARTER
                          : CAVS_LUMA_MOTION_EIGHTH,
             &decoded_motion);
+        (void)cavs_derive_p_skip_motion(
+            motion_candidates, (uint16_t)(data[size - 1U] % 16U + 1U),
+            data[0] & 1U ? CAVS_LUMA_MOTION_QUARTER
+                         : CAVS_LUMA_MOTION_EIGHTH,
+            &decoded_motion);
+        (void)cavs_derive_symmetric_motion(
+            &difference_motion, (int8_t)(data[0] & 1U), data[0] & 1U,
+            (uint16_t)(data[0] % 16U + 1U),
+            (uint16_t)(data[size - 1U] % 16U + 1U),
+            data[0] & 1U ? CAVS_LUMA_MOTION_QUARTER
+                         : CAVS_LUMA_MOTION_EIGHTH,
+            &bidirectional_motion);
+        (void)cavs_derive_direct_motion(
+            &difference_motion, (int8_t)(data[0] % 4U),
+            (int8_t)(data[size - 1U] % 4U),
+            data[0] & 1U, data[size - 1U] & 1U,
+            (uint16_t)(data[0] % 16U + 1U),
+            (uint16_t)(data[size - 1U] % 16U + 1U),
+            (uint16_t)(data[(size / 2U)] % 16U + 1U),
+            data[0] & 1U ? CAVS_LUMA_MOTION_QUARTER
+                         : CAVS_LUMA_MOTION_EIGHTH,
+            &bidirectional_motion);
         availability.top = size > 1U ? (uint16_t)(data[0] | data[1] << 8U) : 0U;
         availability.left = size > 2U ? (uint16_t)(data[1] | data[2] << 8U) : 0U;
         availability.top_left = data[0] & 1U;

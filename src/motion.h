@@ -19,6 +19,13 @@ typedef struct cavs_motion_vector {
     int32_t y;
 } cavs_motion_vector;
 
+typedef struct cavs_bidirectional_motion {
+    cavs_motion_vector forward;
+    cavs_motion_vector backward;
+    int8_t forward_reference_index;
+    int8_t backward_reference_index;
+} cavs_bidirectional_motion;
+
 typedef struct cavs_motion_candidate {
     cavs_motion_vector vector;
     uint16_t block_distance;
@@ -64,6 +71,27 @@ cavs_result cavs_predict_luma_motion(
 cavs_result cavs_decode_luma_motion(
     const cavs_motion_vector *prediction, const cavs_motion_vector *difference,
     cavs_luma_motion_precision precision, cavs_motion_vector *motion);
+
+/* Implements the P_Skip zero shortcuts and default-reference prediction. */
+cavs_result cavs_derive_p_skip_motion(
+    const cavs_motion_candidate candidates[CAVS_MOTION_NEIGHBOR_COUNT],
+    uint16_t default_block_distance, cavs_luma_motion_precision precision,
+    cavs_motion_vector *motion);
+
+/* Derives the backward reference and vector for a symmetric-mode block. */
+cavs_result cavs_derive_symmetric_motion(
+    const cavs_motion_vector *forward, int8_t forward_reference_index,
+    uint8_t picture_structure, uint16_t forward_block_distance,
+    uint16_t backward_block_distance, cavs_luma_motion_precision precision,
+    cavs_bidirectional_motion *motion);
+
+/* Applies frame/field conversion and B_Direct forward/backward scaling. */
+cavs_result cavs_derive_direct_motion(
+    const cavs_motion_vector *colocated, int8_t forward_reference_index,
+    int8_t backward_reference_index, uint8_t current_picture_structure,
+    uint8_t colocated_picture_structure, uint16_t colocated_block_distance,
+    uint16_t forward_block_distance, uint16_t backward_block_distance,
+    cavs_luma_motion_precision precision, cavs_bidirectional_motion *motion);
 
 /* Maps the luma motion vector to YUV420 or YUV422 chroma sample units. */
 cavs_result cavs_derive_chroma_motion(

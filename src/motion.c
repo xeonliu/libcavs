@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: BSD-3-Clause
  *
  * GB/T 20090.2-2013, 信息技术 先进音视频编码 第2部分: 视频,
- * 9.4.6.2-9.4.6.3 and 9.10.2, Figures 18, 32, 42, and 43.
+ * 9.4.6.2-9.4.6.3 and 9.10.1-9.10.2, Figures 18, 32, and 36-43.
  */
 #include "motion.h"
 #include <limits.h>
@@ -195,6 +195,168 @@ cavs_result cavs_decode_luma_motion(
     decoded.x = (int32_t)x;
     decoded.y = (int32_t)y;
     *motion = decoded;
+    return CAVS_OK;
+}
+
+cavs_result cavs_derive_p_skip_motion(
+    const cavs_motion_candidate candidates[CAVS_MOTION_NEIGHBOR_COUNT],
+    uint16_t default_block_distance, cavs_luma_motion_precision precision,
+    cavs_motion_vector *motion) {
+    cavs_motion_vector derived;
+    cavs_motion_candidate neighbor_a;
+    cavs_motion_candidate neighbor_b;
+    int32_t minimum;
+    int32_t maximum;
+    unsigned index;
+    if (candidates == NULL || motion == NULL ||
+        default_block_distance == 0U || default_block_distance > 511U ||
+        !motion_range(precision, &minimum, &maximum))
+        return CAVS_ERR_INVALID_ARGUMENT;
+    for (index = 0U; index < CAVS_MOTION_NEIGHBOR_COUNT; ++index) {
+        if (!candidate_valid(&candidates[index]))
+            return CAVS_ERR_INVALID_ARGUMENT;
+    }
+    neighbor_a = normalized_candidate(candidates[CAVS_MOTION_NEIGHBOR_A]);
+    neighbor_b = normalized_candidate(candidates[CAVS_MOTION_NEIGHBOR_B]);
+    if (candidates[CAVS_MOTION_NEIGHBOR_A].available == 0U ||
+        candidates[CAVS_MOTION_NEIGHBOR_B].available == 0U ||
+        (neighbor_a.reference_index == 0 && neighbor_a.vector.x == 0 &&
+         neighbor_a.vector.y == 0) ||
+        (neighbor_b.reference_index == 0 && neighbor_b.vector.x == 0 &&
+         neighbor_b.vector.y == 0)) {
+        derived.x = 0;
+        derived.y = 0;
+    } else {
+        cavs_result result = cavs_predict_luma_motion(
+            candidates, 0, default_block_distance,
+            CAVS_MOTION_PARTITION_OTHER, precision, &derived);
+        if (result != CAVS_OK) return result;
+    }
+    if (!vector_in_range(derived, minimum, maximum))
+        return CAVS_ERR_CORRUPT_BITSTREAM;
+    *motion = derived;
+    return CAVS_OK;
+}
+
+static int64_t floor_divide_power_of_two(int64_t value, unsigned shift) {
+    int64_t divisor = INT64_C(1) << shift;
+    if (value >= 0) return value / divisor;
+    return -((-value + divisor - 1) / divisor);
+}
+
+static int derive_symmetric_component(int32_t forward,
+                                      uint16_t forward_distance,
+                                      uint16_t backward_distance,
+                                      int32_t *backward) {
+    int64_t factor;
+    int64_t value;
+    int64_t derived;
+    if (forward_distance == 0U || backward_distance == 0U) return 0;
+    factor = (int64_t)backward_distance * (512U / forward_distance);
+    value = (int64_t)forward * factor + 256;
+    derived = -floor_divide_power_of_two(value, 9U);
+    if (derived < INT32_MIN || derived > INT32_MAX) return 0;
+    *backward = (int32_t)derived;
+    return 1;
+}
+
+cavs_result cavs_derive_symmetric_motion(
+    const cavs_motion_vector *forward, int8_t forward_reference_index,
+    uint8_t picture_structure, uint16_t forward_block_distance,
+    uint16_t backward_block_distance, cavs_luma_motion_precision precision,
+    cavs_bidirectional_motion *motion) {
+    cavs_bidirectional_motion derived;
+    int32_t minimum;
+    int32_t maximum;
+    if (forward == NULL || motion == NULL || picture_structure > 1U ||
+        forward_reference_index < 0 || forward_reference_index > 1 ||
+        forward_block_distance == 0U || forward_block_distance > 511U ||
+        backward_block_distance == 0U || backward_block_distance > 511U ||
+        !motion_range(precision, &minimum, &maximum) ||
+        !vector_in_range(*forward, minimum, maximum))
+        return CAVS_ERR_INVALID_ARGUMENT;
+    derived.forward = *forward;
+    derived.forward_reference_index = forward_reference_index;
+    derived.backward_reference_index = picture_structure != 0U ?
+        forward_reference_index : (int8_t)(1 - forward_reference_index);
+    if (!derive_symmetric_component(forward->x, forward_block_distance,
+                                    backward_block_distance,
+                                    &derived.backward.x) ||
+        !derive_symmetric_component(forward->y, forward_block_distance,
+                                    backward_block_distance,
+                                    &derived.backward.y))
+        return CAVS_ERR_CORRUPT_BITSTREAM;
+    if (!vector_in_range(derived.backward, minimum, maximum))
+        return CAVS_ERR_CORRUPT_BITSTREAM;
+    *motion = derived;
+    return CAVS_OK;
+}
+
+static int derive_direct_component(int32_t colocated, uint16_t distance,
+                                   uint16_t denominator_distance,
+                                   int opposite, int32_t *component) {
+    uint64_t magnitude = colocated < 0 ?
+        (uint64_t)(-(int64_t)colocated) : (uint64_t)colocated;
+    uint64_t denominator;
+    uint64_t numerator;
+    uint64_t scaled;
+    int negative;
+    if (denominator_distance == 0U || distance == 0U) return 0;
+    denominator = 16384U / denominator_distance;
+    numerator = denominator * (1U + magnitude * distance) - 1U;
+    scaled = numerator / 16384U;
+    if (scaled > INT32_MAX) return 0;
+    negative = (colocated < 0) != (opposite != 0);
+    *component = negative ? -(int32_t)scaled : (int32_t)scaled;
+    return 1;
+}
+
+cavs_result cavs_derive_direct_motion(
+    const cavs_motion_vector *colocated, int8_t forward_reference_index,
+    int8_t backward_reference_index, uint8_t current_picture_structure,
+    uint8_t colocated_picture_structure, uint16_t colocated_block_distance,
+    uint16_t forward_block_distance, uint16_t backward_block_distance,
+    cavs_luma_motion_precision precision, cavs_bidirectional_motion *motion) {
+    cavs_bidirectional_motion derived;
+    cavs_motion_vector adjusted;
+    int32_t minimum;
+    int32_t maximum;
+    if (colocated == NULL || motion == NULL ||
+        forward_reference_index < 0 || forward_reference_index >= 4 ||
+        backward_reference_index < 0 || backward_reference_index >= 4 ||
+        current_picture_structure > 1U || colocated_picture_structure > 1U ||
+        colocated_block_distance == 0U || colocated_block_distance > 511U ||
+        forward_block_distance == 0U || forward_block_distance > 511U ||
+        backward_block_distance == 0U || backward_block_distance > 511U ||
+        !motion_range(precision, &minimum, &maximum) ||
+        !vector_in_range(*colocated, minimum, maximum))
+        return CAVS_ERR_INVALID_ARGUMENT;
+    adjusted = *colocated;
+    if (current_picture_structure != 0U &&
+        colocated_picture_structure == 0U)
+        adjusted.y *= 2;
+    else if (current_picture_structure == 0U &&
+             colocated_picture_structure != 0U)
+        adjusted.y /= 2;
+    derived.forward_reference_index = forward_reference_index;
+    derived.backward_reference_index = backward_reference_index;
+    if (!derive_direct_component(adjusted.x, forward_block_distance,
+                                 colocated_block_distance, 0,
+                                 &derived.forward.x) ||
+        !derive_direct_component(adjusted.y, forward_block_distance,
+                                 colocated_block_distance, 0,
+                                 &derived.forward.y) ||
+        !derive_direct_component(adjusted.x, backward_block_distance,
+                                 colocated_block_distance, 1,
+                                 &derived.backward.x) ||
+        !derive_direct_component(adjusted.y, backward_block_distance,
+                                 colocated_block_distance, 1,
+                                 &derived.backward.y))
+        return CAVS_ERR_CORRUPT_BITSTREAM;
+    if (!vector_in_range(derived.forward, minimum, maximum) ||
+        !vector_in_range(derived.backward, minimum, maximum))
+        return CAVS_ERR_CORRUPT_BITSTREAM;
+    *motion = derived;
     return CAVS_OK;
 }
 

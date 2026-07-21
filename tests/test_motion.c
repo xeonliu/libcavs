@@ -243,6 +243,127 @@ static void test_motion_prediction_invalid(void) {
            CAVS_ERR_INVALID_ARGUMENT);
 }
 
+static void test_p_skip_motion(void) {
+    cavs_motion_candidate candidates[CAVS_MOTION_NEIGHBOR_COUNT];
+    cavs_motion_vector motion = {77, 88};
+    clear_motion_candidates(candidates);
+    candidates[0] = motion_candidate(4, 8, 2U, 0);
+    candidates[1] = motion_candidate(8, 16, 4U, 0);
+    candidates[2] = motion_candidate(12, 24, 6U, 0);
+    assert(cavs_derive_p_skip_motion(
+               candidates, 4U, CAVS_LUMA_MOTION_QUARTER,
+               &motion) == CAVS_OK);
+    assert(motion.x == 8 && motion.y == 16);
+
+    candidates[0].available = 0U;
+    assert(cavs_derive_p_skip_motion(
+               candidates, 4U, CAVS_LUMA_MOTION_QUARTER,
+               &motion) == CAVS_OK);
+    assert(motion.x == 0 && motion.y == 0);
+    candidates[0] = motion_candidate(0, 0, 2U, 0);
+    assert(cavs_derive_p_skip_motion(
+               candidates, 4U, CAVS_LUMA_MOTION_QUARTER,
+               &motion) == CAVS_OK);
+    assert(motion.x == 0 && motion.y == 0);
+
+    candidates[0].intra = 1U;
+    candidates[1] = motion_candidate(9, -7, 4U, 0);
+    candidates[2].available = 0U;
+    assert(cavs_derive_p_skip_motion(
+               candidates, 4U, CAVS_LUMA_MOTION_QUARTER,
+               &motion) == CAVS_OK);
+    assert(motion.x == 9 && motion.y == -7);
+
+    motion.x = 77;
+    motion.y = 88;
+    assert(cavs_derive_p_skip_motion(
+               candidates, 0U, CAVS_LUMA_MOTION_QUARTER,
+               &motion) == CAVS_ERR_INVALID_ARGUMENT);
+    assert(motion.x == 77 && motion.y == 88);
+}
+
+static void test_symmetric_motion(void) {
+    cavs_motion_vector forward = {3, -3};
+    cavs_bidirectional_motion motion;
+    cavs_bidirectional_motion unchanged;
+    memset(&motion, 0xa5, sizeof(motion));
+    assert(cavs_derive_symmetric_motion(
+               &forward, 1, 1U, 3U, 2U,
+               CAVS_LUMA_MOTION_QUARTER, &motion) == CAVS_OK);
+    assert(motion.forward.x == 3 && motion.forward.y == -3);
+    assert(motion.forward_reference_index == 1);
+    assert(motion.backward_reference_index == 1);
+    assert(motion.backward.x == -2 && motion.backward.y == 2);
+
+    assert(cavs_derive_symmetric_motion(
+               &forward, 1, 0U, 3U, 2U,
+               CAVS_LUMA_MOTION_QUARTER, &motion) == CAVS_OK);
+    assert(motion.backward_reference_index == 0);
+
+    memset(&motion, 0xa5, sizeof(motion));
+    unchanged = motion;
+    assert(cavs_derive_symmetric_motion(
+               &forward, 1, 1U, 0U, 2U,
+               CAVS_LUMA_MOTION_QUARTER, &motion) ==
+           CAVS_ERR_INVALID_ARGUMENT);
+    assert(memcmp(&motion, &unchanged, sizeof(motion)) == 0);
+    forward.x = 4095;
+    forward.y = -4096;
+    assert(cavs_derive_symmetric_motion(
+               &forward, 0, 1U, 1U, 511U,
+               CAVS_LUMA_MOTION_QUARTER, &motion) ==
+           CAVS_ERR_CORRUPT_BITSTREAM);
+    assert(memcmp(&motion, &unchanged, sizeof(motion)) == 0);
+}
+
+static void test_direct_motion(void) {
+    cavs_motion_vector colocated = {3, -3};
+    cavs_bidirectional_motion motion;
+    cavs_bidirectional_motion unchanged;
+    memset(&motion, 0, sizeof(motion));
+    assert(cavs_derive_direct_motion(
+               &colocated, 0, 1, 1U, 1U, 5U, 2U, 3U,
+               CAVS_LUMA_MOTION_QUARTER, &motion) == CAVS_OK);
+    assert(motion.forward_reference_index == 0);
+    assert(motion.backward_reference_index == 1);
+    assert(motion.forward.x == 1 && motion.forward.y == -1);
+    assert(motion.backward.x == -1 && motion.backward.y == 1);
+
+    colocated.x = 0;
+    colocated.y = 0;
+    assert(cavs_derive_direct_motion(
+               &colocated, 2, 3, 1U, 1U, 7U, 4U, 6U,
+               CAVS_LUMA_MOTION_EIGHTH, &motion) == CAVS_OK);
+    assert(motion.forward.x == 0 && motion.forward.y == 0);
+    assert(motion.backward.x == 0 && motion.backward.y == 0);
+
+    colocated.y = 3;
+    assert(cavs_derive_direct_motion(
+               &colocated, 0, 1, 1U, 0U, 5U, 2U, 3U,
+               CAVS_LUMA_MOTION_QUARTER, &motion) == CAVS_OK);
+    assert(motion.forward.y == 2 && motion.backward.y == -3);
+    colocated.y = -3;
+    assert(cavs_derive_direct_motion(
+               &colocated, 0, 1, 0U, 1U, 1U, 1U, 1U,
+               CAVS_LUMA_MOTION_QUARTER, &motion) == CAVS_OK);
+    assert(motion.forward.y == -1 && motion.backward.y == 1);
+
+    memset(&motion, 0xa5, sizeof(motion));
+    unchanged = motion;
+    assert(cavs_derive_direct_motion(
+               &colocated, 0, 1, 1U, 1U, 0U, 2U, 3U,
+               CAVS_LUMA_MOTION_QUARTER, &motion) ==
+           CAVS_ERR_INVALID_ARGUMENT);
+    assert(memcmp(&motion, &unchanged, sizeof(motion)) == 0);
+    colocated.x = 4095;
+    colocated.y = -4096;
+    assert(cavs_derive_direct_motion(
+               &colocated, 0, 1, 1U, 1U, 1U, 511U, 511U,
+               CAVS_LUMA_MOTION_QUARTER, &motion) ==
+           CAVS_ERR_CORRUPT_BITSTREAM);
+    assert(memcmp(&motion, &unchanged, sizeof(motion)) == 0);
+}
+
 static void test_chroma_integer_and_stride(void) {
     uint8_t plane[12U * 16U];
     uint8_t prediction[8U * 10U];
@@ -658,6 +779,9 @@ void test_motion(void) {
     test_motion_prediction_scaling();
     test_motion_difference_decoding();
     test_motion_prediction_invalid();
+    test_p_skip_motion();
+    test_symmetric_motion();
+    test_direct_motion();
     test_chroma_motion_derivation();
     test_chroma_integer_and_stride();
     test_chroma_fractional();
