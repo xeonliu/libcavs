@@ -13,6 +13,7 @@
 
 /* Runs syntax tests implemented in the companion translation unit. */
 void test_syntax(void);
+void test_macroblock(void);
 
 /* Exercises fixed-width reads and exact final-byte bit limits. */
 static void test_fixed_bits(void) {
@@ -82,5 +83,6 @@ int main(void) {
     test_pseudo_start_code();
     test_safe_helpers();
     test_syntax();
+    test_macroblock();
     return 0;
 }

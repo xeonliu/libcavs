@@ -2,9 +2,10 @@
  * Copyright (c) 2026 libcavs contributors
  * SPDX-License-Identifier: BSD-3-Clause
  *
- * Public-API fuzz entry point for complete synthesized Annex-B units.
+ * Public-API and baseline macroblock fuzz entry point.
  */
 #include <cavs/cavs.h>
+#include "macroblock.h"
 #include <stddef.h>
 #include <stdint.h>
 #include <stdlib.h>
@@ -44,6 +45,27 @@ int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
         cavs_decoder_destroy(decoder);
     }
     free(nal);
+
+    if (size <= SIZE_MAX / 8U) {
+        cavs_baseline420_mb_context context;
+        cavs_baseline420_mb_header header;
+        memset(&context, 0, sizeof(context));
+        context.profile_id = UINT8_C(0x20);
+        context.format = CAVS_YUV420P8;
+        context.picture_type = (cavs_picture_type)(data[0] % 3U);
+        context.picture_structure = size > 1U ? data[1] & 1U : 1U;
+        context.skip_mode_flag = size > 2U ? data[2] & 1U : 0U;
+        context.picture_reference_flag = size > 3U ? data[3] & 1U : 1U;
+        context.fixed_qp = size > 4U ? data[4] & 1U : 0U;
+        context.previous_qp = size > 5U ? data[5] & 63U : 0U;
+        context.reference_index_bits = size > 6U ? (data[6] & 1U) + 1U : 1U;
+        context.mb_weighting_flag = size > 7U ? data[7] & 1U : 0U;
+        context.macroblock_width = 2U;
+        context.macroblock_height = 2U;
+        context.macroblock_index = size > 8U ? data[8] & 3U : 0U;
+        (void)cavs_parse_baseline420_mb_header(data, size * 8U, 0U,
+                                               &context, &header);
+    }
     return 0;
 }
 
