@@ -1,0 +1,12 @@
+.DS_Store
+/build/
+/uavs3d/
+*.o
+*.obj
+*.a
+*.lib
+*.so
+*.dylib
+*.dll
+*.exe
+

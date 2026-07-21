@@ -1,0 +1,4 @@
+id,component,standard,edition,clause,table,profile,derivation,verification,status
+INFRA-001,Annex-B start-code validation,GB/T 20090.2,2013,"6-8",,0x20,"Direct syntax constraint; detailed clause pending standard review","Malformed-prefix unit test pending",provisional
+INFRA-002,Unsigned exponential-Golomb reader,GB/T 20090.2,2013,"6-8",,0x20,"Derived from normative binarization; exact clause pending standard review","Independent boundary vectors",provisional
+
