@@ -127,6 +127,10 @@ int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
             data[0] & 1U ? CAVS_CHROMA_MOTION_EIGHTH
                          : CAVS_CHROMA_MOTION_SIXTEENTH,
             motion_prediction, 8U);
+        (void)cavs_interpolate_luma_block_quarter(
+            reference_plane, 16U, 16U, 16U, 0U, 0U, 16U, 16U,
+            (int8_t)data[0], (int8_t)data[size - 1U],
+            reference_plane, 16U);
     }
     return 0;
 }

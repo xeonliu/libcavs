@@ -35,4 +35,11 @@ cavs_result cavs_interpolate_chroma_block(
     cavs_chroma_motion_precision precision,
     uint8_t *prediction, size_t prediction_stride);
 
+/* Interpolates one luma block using quarter-sample motion components. */
+cavs_result cavs_interpolate_luma_block_quarter(
+    const uint8_t *plane, size_t width, size_t height, size_t stride,
+    size_t x0, size_t y0, size_t block_width, size_t block_height,
+    int32_t motion_x, int32_t motion_y,
+    uint8_t *prediction, size_t prediction_stride);
+
 #endif
