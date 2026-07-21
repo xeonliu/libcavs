@@ -85,6 +85,10 @@ int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
         uint8_t prediction[64];
         uint8_t reconstructed[64];
         uint8_t motion_prediction[64];
+        cavs_motion_candidate motion_candidates[CAVS_MOTION_NEIGHBOR_COUNT];
+        cavs_motion_vector predicted_motion = {0, 0};
+        cavs_motion_vector difference_motion;
+        cavs_motion_vector decoded_motion;
         uint8_t weights[64];
         unsigned index;
         for (index = 0U; index < 64U; ++index) {
@@ -108,6 +112,34 @@ int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
         references.left[0] = references.top[0];
         for (index = 0U; index < sizeof(reference_plane); ++index)
             reference_plane[index] = data[index % size];
+        for (index = 0U; index < CAVS_MOTION_NEIGHBOR_COUNT; ++index) {
+            memset(&motion_candidates[index], 0, sizeof(motion_candidates[index]));
+            motion_candidates[index].vector.x = (int8_t)data[index % size];
+            motion_candidates[index].vector.y =
+                (int8_t)data[(index + 1U) % size];
+            motion_candidates[index].block_distance =
+                (uint16_t)(data[(index + 2U) % size] % 16U + 1U);
+            motion_candidates[index].reference_index =
+                (int8_t)(data[(index + 3U) % size] % 4U);
+            motion_candidates[index].available = data[index % size] & 1U;
+            motion_candidates[index].intra = data[(index + 1U) % size] & 1U;
+            motion_candidates[index].same_direction =
+                data[(index + 2U) % size] & 1U;
+        }
+        (void)cavs_predict_luma_motion(
+            motion_candidates, (int8_t)(data[0] % 4U),
+            (uint16_t)(data[size - 1U] % 16U + 1U),
+            (cavs_motion_partition_position)(data[0] % 5U),
+            data[0] & 1U ? CAVS_LUMA_MOTION_QUARTER
+                         : CAVS_LUMA_MOTION_EIGHTH,
+            &predicted_motion);
+        difference_motion.x = (int8_t)data[0];
+        difference_motion.y = (int8_t)data[size - 1U];
+        (void)cavs_decode_luma_motion(
+            &predicted_motion, &difference_motion,
+            data[0] & 1U ? CAVS_LUMA_MOTION_QUARTER
+                         : CAVS_LUMA_MOTION_EIGHTH,
+            &decoded_motion);
         availability.top = size > 1U ? (uint16_t)(data[0] | data[1] << 8U) : 0U;
         availability.left = size > 2U ? (uint16_t)(data[1] | data[2] << 8U) : 0U;
         availability.top_left = data[0] & 1U;

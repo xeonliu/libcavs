@@ -30,6 +30,219 @@ static void fill_luma_pattern(uint8_t *plane, size_t width, size_t height,
                 (uint8_t)((x * 37U + y * 53U + x * y * 11U + 17U) & 255U);
 }
 
+static cavs_motion_candidate motion_candidate(
+    int32_t x, int32_t y, uint16_t distance, int8_t reference_index) {
+    cavs_motion_candidate candidate;
+    memset(&candidate, 0, sizeof(candidate));
+    candidate.vector.x = x;
+    candidate.vector.y = y;
+    candidate.block_distance = distance;
+    candidate.reference_index = reference_index;
+    candidate.available = 1U;
+    candidate.same_direction = 1U;
+    return candidate;
+}
+
+static void clear_motion_candidates(
+    cavs_motion_candidate candidates[CAVS_MOTION_NEIGHBOR_COUNT]) {
+    unsigned index;
+    memset(candidates, 0, sizeof(*candidates) * CAVS_MOTION_NEIGHBOR_COUNT);
+    for (index = 0U; index < CAVS_MOTION_NEIGHBOR_COUNT; ++index) {
+        candidates[index].block_distance = 1U;
+        candidates[index].reference_index = -1;
+    }
+}
+
+static void test_motion_prediction_normalization(void) {
+    cavs_motion_candidate candidates[CAVS_MOTION_NEIGHBOR_COUNT];
+    cavs_motion_vector prediction;
+    clear_motion_candidates(candidates);
+    candidates[CAVS_MOTION_NEIGHBOR_A] = motion_candidate(7, -9, 3U, 0);
+    assert(cavs_predict_luma_motion(
+               candidates, 0, 3U, CAVS_MOTION_PARTITION_OTHER,
+               CAVS_LUMA_MOTION_QUARTER, &prediction) == CAVS_OK);
+    assert(prediction.x == 7 && prediction.y == -9);
+
+    clear_motion_candidates(candidates);
+    candidates[CAVS_MOTION_NEIGHBOR_D] = motion_candidate(-12, 18, 5U, 1);
+    assert(cavs_predict_luma_motion(
+               candidates, 1, 5U, CAVS_MOTION_PARTITION_OTHER,
+               CAVS_LUMA_MOTION_QUARTER, &prediction) == CAVS_OK);
+    assert(prediction.x == -12 && prediction.y == 18);
+
+    candidates[CAVS_MOTION_NEIGHBOR_C] = motion_candidate(99, 99, 2U, 1);
+    candidates[CAVS_MOTION_NEIGHBOR_C].intra = 1U;
+    assert(cavs_predict_luma_motion(
+               candidates, 1, 5U, CAVS_MOTION_PARTITION_OTHER,
+               CAVS_LUMA_MOTION_QUARTER, &prediction) == CAVS_OK);
+    assert(prediction.x == 0 && prediction.y == 0);
+
+    clear_motion_candidates(candidates);
+    candidates[0] = motion_candidate(50, 60, 1U, 0);
+    candidates[0].same_direction = 0U;
+    candidates[1] = motion_candidate(-3, 4, 1U, 0);
+    assert(cavs_predict_luma_motion(
+               candidates, 0, 1U, CAVS_MOTION_PARTITION_OTHER,
+               CAVS_LUMA_MOTION_QUARTER, &prediction) == CAVS_OK);
+    assert(prediction.x == -3 && prediction.y == 4);
+}
+
+static void test_motion_prediction_partition_shortcuts(void) {
+    cavs_motion_candidate candidates[CAVS_MOTION_NEIGHBOR_COUNT];
+    cavs_motion_vector prediction;
+    clear_motion_candidates(candidates);
+    candidates[0] = motion_candidate(1, 11, 1U, 2);
+    candidates[1] = motion_candidate(2, 12, 1U, 2);
+    candidates[2] = motion_candidate(3, 13, 1U, 2);
+    assert(cavs_predict_luma_motion(
+               candidates, 2, 1U, CAVS_MOTION_PARTITION_8X16_LEFT,
+               CAVS_LUMA_MOTION_QUARTER, &prediction) == CAVS_OK);
+    assert(prediction.x == 1 && prediction.y == 11);
+    assert(cavs_predict_luma_motion(
+               candidates, 2, 1U, CAVS_MOTION_PARTITION_8X16_RIGHT,
+               CAVS_LUMA_MOTION_QUARTER, &prediction) == CAVS_OK);
+    assert(prediction.x == 3 && prediction.y == 13);
+    assert(cavs_predict_luma_motion(
+               candidates, 2, 1U, CAVS_MOTION_PARTITION_16X8_TOP,
+               CAVS_LUMA_MOTION_QUARTER, &prediction) == CAVS_OK);
+    assert(prediction.x == 2 && prediction.y == 12);
+    assert(cavs_predict_luma_motion(
+               candidates, 2, 1U, CAVS_MOTION_PARTITION_16X8_BOTTOM,
+               CAVS_LUMA_MOTION_QUARTER, &prediction) == CAVS_OK);
+    assert(prediction.x == 1 && prediction.y == 11);
+}
+
+static void set_median_candidates(
+    cavs_motion_candidate candidates[CAVS_MOTION_NEIGHBOR_COUNT],
+    int32_t a, int32_t b, int32_t c) {
+    clear_motion_candidates(candidates);
+    candidates[0] = motion_candidate(a, 0, 1U, 0);
+    candidates[1] = motion_candidate(b, 0, 1U, 0);
+    candidates[2] = motion_candidate(c, 0, 1U, 0);
+}
+
+static void test_motion_prediction_median_selection(void) {
+    cavs_motion_candidate candidates[CAVS_MOTION_NEIGHBOR_COUNT];
+    cavs_motion_vector prediction;
+    set_median_candidates(candidates, 0, 10, 15);
+    assert(cavs_predict_luma_motion(
+               candidates, 0, 1U, CAVS_MOTION_PARTITION_OTHER,
+               CAVS_LUMA_MOTION_QUARTER, &prediction) == CAVS_OK);
+    assert(prediction.x == 15);
+    set_median_candidates(candidates, 0, 10, 30);
+    assert(cavs_predict_luma_motion(
+               candidates, 0, 1U, CAVS_MOTION_PARTITION_OTHER,
+               CAVS_LUMA_MOTION_QUARTER, &prediction) == CAVS_OK);
+    assert(prediction.x == 0);
+    set_median_candidates(candidates, 0, 30, 20);
+    assert(cavs_predict_luma_motion(
+               candidates, 0, 1U, CAVS_MOTION_PARTITION_OTHER,
+               CAVS_LUMA_MOTION_QUARTER, &prediction) == CAVS_OK);
+    assert(prediction.x == 30);
+}
+
+static void test_motion_prediction_scaling(void) {
+    cavs_motion_candidate candidates[CAVS_MOTION_NEIGHBOR_COUNT];
+    cavs_motion_vector prediction;
+    clear_motion_candidates(candidates);
+    candidates[0] = motion_candidate(10, -11, 2U, 0);
+    candidates[1] = motion_candidate(40, -44, 4U, 0);
+    candidates[2] = motion_candidate(30, -33, 6U, 0);
+    assert(cavs_predict_luma_motion(
+               candidates, 0, 4U, CAVS_MOTION_PARTITION_OTHER,
+               CAVS_LUMA_MOTION_QUARTER, &prediction) == CAVS_OK);
+    assert(prediction.x == 20 && prediction.y == -22);
+
+    candidates[0] = motion_candidate(4095, 4095, 1U, 0);
+    candidates[1] = candidates[0];
+    candidates[2] = candidates[0];
+    prediction.x = 77;
+    prediction.y = 88;
+    assert(cavs_predict_luma_motion(
+               candidates, 0, 511U, CAVS_MOTION_PARTITION_OTHER,
+               CAVS_LUMA_MOTION_QUARTER, &prediction) == CAVS_OK);
+    assert(prediction.x == 2092545 && prediction.y == 2092545);
+}
+
+static void test_motion_difference_decoding(void) {
+    cavs_motion_vector prediction = {4000, -4000};
+    cavs_motion_vector difference = {95, -96};
+    cavs_motion_vector decoded = {77, 88};
+    assert(cavs_decode_luma_motion(
+               &prediction, &difference, CAVS_LUMA_MOTION_QUARTER,
+               &decoded) == CAVS_OK);
+    assert(decoded.x == 4095 && decoded.y == -4096);
+    difference.x = 96;
+    decoded.x = 77;
+    decoded.y = 88;
+    assert(cavs_decode_luma_motion(
+               &prediction, &difference, CAVS_LUMA_MOTION_QUARTER,
+               &decoded) == CAVS_ERR_CORRUPT_BITSTREAM);
+    assert(decoded.x == 77 && decoded.y == 88);
+    prediction.x = -8000;
+    prediction.y = 8000;
+    difference.x = -192;
+    difference.y = 191;
+    assert(cavs_decode_luma_motion(
+               &prediction, &difference, CAVS_LUMA_MOTION_EIGHTH,
+               &decoded) == CAVS_OK);
+    assert(decoded.x == -8192 && decoded.y == 8191);
+    prediction.x = 5000;
+    prediction.y = -5000;
+    difference.x = -1000;
+    difference.y = 1000;
+    assert(cavs_decode_luma_motion(
+               &prediction, &difference, CAVS_LUMA_MOTION_QUARTER,
+               &decoded) == CAVS_OK);
+    assert(decoded.x == 4000 && decoded.y == -4000);
+}
+
+static void test_motion_prediction_invalid(void) {
+    cavs_motion_candidate candidates[CAVS_MOTION_NEIGHBOR_COUNT];
+    cavs_motion_vector prediction = {77, 88};
+    clear_motion_candidates(candidates);
+    candidates[0] = motion_candidate(1, 2, 0U, 0);
+    assert(cavs_predict_luma_motion(
+               candidates, 0, 1U, CAVS_MOTION_PARTITION_OTHER,
+               CAVS_LUMA_MOTION_QUARTER, &prediction) ==
+           CAVS_ERR_INVALID_ARGUMENT);
+    assert(prediction.x == 77 && prediction.y == 88);
+    candidates[0] = motion_candidate(1, 2, 1U, 0);
+    candidates[0].available = 2U;
+    assert(cavs_predict_luma_motion(
+               candidates, 0, 1U, CAVS_MOTION_PARTITION_OTHER,
+               CAVS_LUMA_MOTION_QUARTER, &prediction) ==
+           CAVS_ERR_INVALID_ARGUMENT);
+    assert(cavs_predict_luma_motion(
+               NULL, 0, 1U, CAVS_MOTION_PARTITION_OTHER,
+               CAVS_LUMA_MOTION_QUARTER, &prediction) ==
+           CAVS_ERR_INVALID_ARGUMENT);
+    clear_motion_candidates(candidates);
+    candidates[0] = motion_candidate(8191, -8192, 1U, 0);
+    assert(cavs_predict_luma_motion(
+               candidates, 0, 1U, CAVS_MOTION_PARTITION_OTHER,
+               CAVS_LUMA_MOTION_EIGHTH, &prediction) == CAVS_OK);
+    assert(prediction.x == 8191 && prediction.y == -8192);
+    prediction.x = 77;
+    prediction.y = 88;
+    assert(cavs_predict_luma_motion(
+               candidates, 0, 1U, CAVS_MOTION_PARTITION_OTHER,
+               CAVS_LUMA_MOTION_QUARTER, &prediction) ==
+           CAVS_ERR_INVALID_ARGUMENT);
+    assert(cavs_predict_luma_motion(
+               candidates, 4, 1U, CAVS_MOTION_PARTITION_OTHER,
+               CAVS_LUMA_MOTION_EIGHTH, &prediction) ==
+           CAVS_ERR_INVALID_ARGUMENT);
+    assert(cavs_predict_luma_motion(
+               candidates, 0, 1U, (cavs_motion_partition_position)5,
+               CAVS_LUMA_MOTION_EIGHTH, &prediction) ==
+           CAVS_ERR_INVALID_ARGUMENT);
+    assert(cavs_predict_luma_motion(
+               candidates, 0, 1U, CAVS_MOTION_PARTITION_OTHER,
+               (cavs_luma_motion_precision)1, &prediction) ==
+           CAVS_ERR_INVALID_ARGUMENT);
+}
+
 static void test_chroma_integer_and_stride(void) {
     uint8_t plane[12U * 16U];
     uint8_t prediction[8U * 10U];
@@ -439,6 +652,12 @@ static void test_luma_eighth_in_place_and_invalid(void) {
 }
 
 void test_motion(void) {
+    test_motion_prediction_normalization();
+    test_motion_prediction_partition_shortcuts();
+    test_motion_prediction_median_selection();
+    test_motion_prediction_scaling();
+    test_motion_difference_decoding();
+    test_motion_prediction_invalid();
     test_chroma_motion_derivation();
     test_chroma_integer_and_stride();
     test_chroma_fractional();
