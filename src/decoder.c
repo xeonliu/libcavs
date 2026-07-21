@@ -30,6 +30,8 @@ struct cavs_decoder {
     cavs_picture_type picture_type;
     cavs_i_picture_header i_picture;
     cavs_pb_picture_header pb_picture;
+    int has_slice;
+    cavs_slice_header slice;
     int64_t picture_pts;
     int64_t picture_dts;
     void *picture_opaque;
@@ -129,6 +131,47 @@ static cavs_result parse_pb_picture_payload(cavs_decoder *decoder,
     return result;
 }
 
+/* Builds the syntax context and parses one unescaped slice header. */
+static cavs_result parse_slice_payload(cavs_decoder *decoder, uint8_t start_code,
+                                       const uint8_t *data, size_t size,
+                                       cavs_slice_header *slice) {
+    cavs_slice_context context;
+    uint8_t *decoded;
+    size_t output_bits;
+    cavs_result result;
+
+    if (size == 0U) return CAVS_ERR_CORRUPT_BITSTREAM;
+    memset(&context, 0, sizeof(context));
+    context.profile_id = decoder->sequence.profile_id;
+    context.vertical_size = decoder->sequence.display_height;
+    context.macroblock_height = decoder->sequence.progressive_sequence != 0U ?
+        (decoder->sequence.display_height + 15U) / 16U :
+        2U * ((decoder->sequence.display_height + 31U) / 32U);
+    context.picture_type = decoder->picture_type;
+    if (decoder->picture_type == CAVS_PICTURE_I) {
+        context.picture_structure = decoder->i_picture.picture_structure;
+        context.fixed_picture_qp = decoder->i_picture.fixed_picture_qp;
+        context.picture_qp = decoder->i_picture.picture_qp;
+        context.advanced_entropy_enabled = decoder->i_picture.advanced_entropy_enabled;
+    } else {
+        context.picture_structure = decoder->pb_picture.picture_structure;
+        context.fixed_picture_qp = decoder->pb_picture.fixed_picture_qp;
+        context.picture_qp = decoder->pb_picture.picture_qp;
+        context.advanced_entropy_enabled = decoder->pb_picture.advanced_entropy_enabled;
+    }
+
+    decoded = (uint8_t *)decoder->config.alloc(decoder->config.allocator_opaque, size);
+    if (decoded == NULL) return CAVS_ERR_OUT_OF_MEMORY;
+    if (!cavs_remove_pseudo_start_codes(data, size, decoded, size, &output_bits)) {
+        decoder->config.free(decoder->config.allocator_opaque, decoded);
+        return CAVS_ERR_CORRUPT_BITSTREAM;
+    }
+    result = cavs_parse_slice_header(start_code, decoded, output_bits,
+                                     &context, slice);
+    decoder->config.free(decoder->config.allocator_opaque, decoded);
+    return result;
+}
+
 /* Validates configuration and creates an empty decoder state. */
 cavs_result cavs_decoder_create(const cavs_decoder_config *config, cavs_decoder **out) {
     cavs_decoder_config cfg;
@@ -150,6 +193,7 @@ cavs_result cavs_decoder_send_nal(cavs_decoder *decoder, const cavs_packet *pack
     cavs_sequence_info sequence;
     cavs_i_picture_header picture;
     cavs_pb_picture_header pb_picture;
+    cavs_slice_header slice;
     cavs_result result;
     if (decoder == NULL || packet == NULL || packet->data == NULL || packet->size < 4U) return CAVS_ERR_INVALID_ARGUMENT;
     if (decoder->flushing) return CAVS_ERR_INVALID_STATE;
@@ -178,6 +222,7 @@ cavs_result cavs_decoder_send_nal(cavs_decoder *decoder, const cavs_packet *pack
         decoder->picture_dts = packet->dts;
         decoder->picture_opaque = packet->opaque;
         decoder->has_picture = 1;
+        decoder->has_slice = 0;
         return CAVS_OK;
     }
     if (unit_type == CAVS_UNIT_PB_PICTURE) {
@@ -192,6 +237,17 @@ cavs_result cavs_decoder_send_nal(cavs_decoder *decoder, const cavs_packet *pack
         decoder->picture_dts = packet->dts;
         decoder->picture_opaque = packet->opaque;
         decoder->has_picture = 1;
+        decoder->has_slice = 0;
+        return CAVS_OK;
+    }
+    if (unit_type == CAVS_UNIT_SLICE) {
+        if (!decoder->has_picture) return CAVS_ERR_INVALID_STATE;
+        result = parse_slice_payload(decoder, packet->data[3],
+                                     packet->data + 4U, packet->size - 4U,
+                                     &slice);
+        if (result != CAVS_OK) return result;
+        decoder->slice = slice;
+        decoder->has_slice = 1;
         return CAVS_OK;
     }
     if (unit_type != CAVS_UNIT_SEQUENCE_HEADER) return CAVS_ERR_UNSUPPORTED_PROFILE;
@@ -201,6 +257,8 @@ cavs_result cavs_decoder_send_nal(cavs_decoder *decoder, const cavs_packet *pack
     if (!decoder->has_sequence || memcmp(&decoder->sequence, &sequence, sizeof(sequence)) != 0) {
         decoder->sequence = sequence;
         decoder->has_sequence = 1;
+        decoder->has_picture = 0;
+        decoder->has_slice = 0;
         decoder->sequence_pending = 1;
     }
     return CAVS_OK;
@@ -246,6 +304,7 @@ cavs_result cavs_decoder_reset(cavs_decoder *decoder) {
     decoder->sequence_pending = 0;
     decoder->has_sequence = 0;
     decoder->has_picture = 0;
+    decoder->has_slice = 0;
     free_payload(decoder, &decoder->pending_payload);
     free_payload(decoder, &decoder->delivered_payload);
     decoder->payload_pending = 0;
@@ -254,6 +313,7 @@ cavs_result cavs_decoder_reset(cavs_decoder *decoder) {
     decoder->picture_type = CAVS_PICTURE_I;
     memset(&decoder->i_picture, 0, sizeof(decoder->i_picture));
     memset(&decoder->pb_picture, 0, sizeof(decoder->pb_picture));
+    memset(&decoder->slice, 0, sizeof(decoder->slice));
     decoder->picture_pts = 0;
     decoder->picture_dts = 0;
     decoder->picture_opaque = NULL;

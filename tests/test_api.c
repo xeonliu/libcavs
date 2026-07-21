@@ -91,6 +91,17 @@ static void make_pb_picture_nal(uint8_t data[10]) {
     assert(position == 76U);
 }
 
+/* Creates one baseline I-picture slice header before its macroblock data. */
+static void make_slice_nal(uint8_t data[5]) {
+    size_t position = 32U;
+    memset(data, 0, 5U);
+    data[2] = 1U;
+    data[3] = 0U;
+    append_bits(data, &position, 1U, 1U);
+    append_bits(data, &position, 20U, 6U);
+    assert(position == 39U);
+}
+
 /* Verifies argument validation, drain behavior, and reset behavior. */
 int main(void) {
     static const uint8_t picture_prefix[] = { 0, 0, 1, 0xb3 };
@@ -100,6 +111,7 @@ int main(void) {
     uint8_t sequence_nal[18];
     uint8_t i_picture_nal[10];
     uint8_t pb_picture_nal[10];
+    uint8_t slice_nal[5];
     cavs_decoder *decoder = NULL;
     cavs_decoder_config bad_config = { 0 };
     cavs_packet packet = { picture_prefix, sizeof(picture_prefix), 1, 2, NULL };
@@ -124,6 +136,11 @@ int main(void) {
     packet.size = sizeof(i_picture_nal);
     packet.pts = 101;
     packet.dts = 99;
+    assert(cavs_decoder_send_nal(decoder, &packet) == CAVS_OK);
+    assert(cavs_decoder_receive_event(decoder, &event) == CAVS_AGAIN);
+    make_slice_nal(slice_nal);
+    packet.data = slice_nal;
+    packet.size = sizeof(slice_nal);
     assert(cavs_decoder_send_nal(decoder, &packet) == CAVS_OK);
     assert(cavs_decoder_receive_event(decoder, &event) == CAVS_AGAIN);
     make_pb_picture_nal(pb_picture_nal);

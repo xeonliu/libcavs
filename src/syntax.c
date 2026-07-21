@@ -25,6 +25,16 @@ static int read_signed_range(cavs_bitreader *reader, int32_t minimum,
     return 1;
 }
 
+/* Reads the two's-complement i(8) form used by slice weighting parameters. */
+static int read_signed_byte(cavs_bitreader *reader, int8_t *value) {
+    uint32_t parsed;
+    int32_t signed_value;
+    if (!read_field(reader, 8U, &parsed)) return 0;
+    signed_value = parsed <= 127U ? (int32_t)parsed : (int32_t)parsed - 256;
+    *value = (int8_t)signed_value;
+    return 1;
+}
+
 /* Validates the component ranges in the 24-bit time code from Table 39. */
 static int is_valid_time_code(uint32_t time_code) {
     uint32_t hours = (time_code >> 18) & UINT32_C(0x1f);
@@ -375,5 +385,94 @@ cavs_result cavs_parse_pb_picture_header(const uint8_t *data, size_t bit_size,
     }
 
     *picture = parsed;
+    return CAVS_OK;
+}
+
+/*
+ * Parses the target-profile subset of GB/T 20090.2-2013, 信息技术 先进音视频编码
+ * 第2部分: 视频, 7.1.3.6 Table 26, and GB/T 20090.16-2016, 7.1.3.5
+ * Table 25. Macroblock syntax begins at slice.header_bits.
+ */
+cavs_result cavs_parse_slice_header(uint8_t start_code, const uint8_t *data,
+                                    size_t bit_size,
+                                    const cavs_slice_context *context,
+                                    cavs_slice_header *slice) {
+    cavs_bitreader reader;
+    cavs_slice_header parsed;
+    uint32_t value;
+    uint32_t vertical_extension = 0U;
+    unsigned index;
+    int has_weighting_fields;
+
+    if ((data == NULL && bit_size != 0U) || context == NULL || slice == NULL)
+        return CAVS_ERR_INVALID_ARGUMENT;
+    if (start_code > UINT8_C(0xaf)) return CAVS_ERR_INVALID_ARGUMENT;
+    if (context->profile_id != UINT8_C(0x20) &&
+        context->profile_id != UINT8_C(0x48))
+        return CAVS_ERR_UNSUPPORTED_PROFILE;
+    if (context->number_of_references > CAVS_MAX_SLICE_REFERENCES ||
+        !cavs_br_init_bits(&reader, data, bit_size))
+        return CAVS_ERR_INVALID_ARGUMENT;
+
+    memset(&parsed, 0, sizeof(parsed));
+    parsed.fixed_slice_qp = context->fixed_picture_qp;
+    parsed.slice_qp = context->picture_qp;
+    if (context->vertical_size > 2800U &&
+        !read_field(&reader, 3U, &vertical_extension))
+        return CAVS_ERR_CORRUPT_BITSTREAM;
+    parsed.macroblock_row = (uint16_t)((vertical_extension << 7) | start_code);
+
+    if (context->fixed_picture_qp == 0U) {
+        if (!read_field(&reader, 1U, &value))
+            return CAVS_ERR_CORRUPT_BITSTREAM;
+        parsed.fixed_slice_qp = (uint8_t)value;
+        if (!read_field(&reader, 6U, &value))
+            return CAVS_ERR_CORRUPT_BITSTREAM;
+        parsed.slice_qp = (uint8_t)value;
+    }
+
+    has_weighting_fields = context->picture_type != CAVS_PICTURE_I ||
+        (context->picture_structure == 0U &&
+         parsed.macroblock_row >= context->macroblock_height / 2U);
+    if (has_weighting_fields) {
+        if (!read_field(&reader, 1U, &value))
+            return CAVS_ERR_CORRUPT_BITSTREAM;
+        parsed.slice_weighting_flag = (uint8_t)value;
+        if (parsed.slice_weighting_flag != 0U) {
+            if (context->number_of_references == 0U)
+                return CAVS_ERR_MISSING_REFERENCE;
+            parsed.number_of_references = context->number_of_references;
+            for (index = 0U; index < parsed.number_of_references; ++index) {
+                if (!read_field(&reader, 8U, &value))
+                    return CAVS_ERR_CORRUPT_BITSTREAM;
+                parsed.luma_scale[index] = (uint8_t)value;
+                if (!read_signed_byte(&reader, &parsed.luma_shift[index]) ||
+                    !read_field(&reader, 1U, &value) || value != 1U ||
+                    !read_field(&reader, 8U, &value))
+                    return CAVS_ERR_CORRUPT_BITSTREAM;
+                parsed.chroma_scale[index] = (uint8_t)value;
+                if (!read_signed_byte(&reader, &parsed.chroma_shift[index]) ||
+                    !read_field(&reader, 1U, &value) || value != 1U)
+                    return CAVS_ERR_CORRUPT_BITSTREAM;
+            }
+            if (!read_field(&reader, 1U, &value))
+                return CAVS_ERR_CORRUPT_BITSTREAM;
+            parsed.mb_weighting_flag = (uint8_t)value;
+        }
+    }
+
+    if (context->advanced_entropy_enabled != 0U) {
+        /*
+         * TODO: Tables 25/26 specify f(1) alignment bits with value 1. The retained
+         * CCTV-9 regression stream writes 0 for the first I-field slice, so
+         * consume these non-semantic bits without enforcing their value.
+         */
+        while ((reader.bit_pos & 7U) != 0U) {
+            if (!read_field(&reader, 1U, &value))
+                return CAVS_ERR_CORRUPT_BITSTREAM;
+        }
+    }
+    parsed.header_bits = reader.bit_pos;
+    *slice = parsed;
     return CAVS_OK;
 }

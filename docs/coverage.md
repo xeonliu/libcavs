@@ -11,7 +11,7 @@ outputs.
 | Pseudo-start-code removal and bit repacking | implemented | implemented | `cavs_unit` |
 | Sequence header syntax and change events | partial | partial | `cavs_unit`, `cavs_api_test` |
 | Level identifier and profile-format constraints | partial | partial | identifier tests; level maxima pending |
-| Extension, picture, slice syntax | partial | partial | Table 21 I-picture header parser and decoder state; PB/slice pending |
+| Extension, picture, slice syntax | partial | partial | I/PB picture and target-profile slice header parsers; macroblocks pending |
 | Macroblock and block syntax | not-started | not-started | - |
 | Basic/advanced entropy decoding | not-started | not-started | - |
 | 4x4/8x8 inverse transform and quantization | not-started | not-started | - |

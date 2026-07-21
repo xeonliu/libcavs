@@ -86,6 +86,36 @@ typedef struct cavs_pb_picture_header {
     uint8_t advanced_entropy_enabled;
 } cavs_pb_picture_header;
 
+#define CAVS_MAX_SLICE_REFERENCES 4U
+
+/** Picture state required to interpret a target-profile slice header. */
+typedef struct cavs_slice_context {
+    uint8_t profile_id;
+    uint32_t vertical_size;
+    uint32_t macroblock_height;
+    cavs_picture_type picture_type;
+    uint8_t picture_structure;
+    uint8_t fixed_picture_qp;
+    uint8_t picture_qp;
+    uint8_t advanced_entropy_enabled;
+    uint8_t number_of_references;
+} cavs_slice_context;
+
+/** Parsed fields shared by baseline and broadcast slice headers. */
+typedef struct cavs_slice_header {
+    uint16_t macroblock_row;
+    uint8_t fixed_slice_qp;
+    uint8_t slice_qp;
+    uint8_t slice_weighting_flag;
+    uint8_t number_of_references;
+    uint8_t luma_scale[CAVS_MAX_SLICE_REFERENCES];
+    int8_t luma_shift[CAVS_MAX_SLICE_REFERENCES];
+    uint8_t chroma_scale[CAVS_MAX_SLICE_REFERENCES];
+    int8_t chroma_shift[CAVS_MAX_SLICE_REFERENCES];
+    uint8_t mb_weighting_flag;
+    size_t header_bits;
+} cavs_slice_header;
+
 /* Classifies one eight-bit start-code value. */
 cavs_unit_type cavs_classify_start_code(uint8_t start_code);
 
@@ -102,5 +132,11 @@ cavs_result cavs_parse_i_picture_header(const uint8_t *data, size_t bit_size,
 cavs_result cavs_parse_pb_picture_header(const uint8_t *data, size_t bit_size,
                                          const cavs_sequence_info *sequence,
                                          cavs_pb_picture_header *picture);
+
+/* Parses fields before the first macroblock in a target-profile slice. */
+cavs_result cavs_parse_slice_header(uint8_t start_code, const uint8_t *data,
+                                    size_t bit_size,
+                                    const cavs_slice_context *context,
+                                    cavs_slice_header *slice);
 
 #endif

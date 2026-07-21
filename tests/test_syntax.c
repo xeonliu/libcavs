@@ -45,6 +45,11 @@ static void write_se(test_bitwriter *writer, int32_t value) {
     write_ue(writer, code);
 }
 
+/* Writes the fixed-width two's-complement form used by i(8). */
+static void write_signed_byte(test_bitwriter *writer, int8_t value) {
+    write_bits(writer, (uint8_t)value, 8U);
+}
+
 /* Builds the common 112-bit syntax from Part 2 Table 15 / Part 16 Table 14. */
 static void make_sequence_header(uint8_t profile, test_bitwriter *writer) {
     memset(writer, 0, sizeof(*writer));
@@ -325,10 +330,80 @@ static void test_pb_picture_headers(void) {
     assert(picture.advanced_entropy_enabled == 1U);
 }
 
+/* Covers target-profile QP, weighting, vertical extension, and alignment. */
+static void test_slice_headers(void) {
+    static const uint8_t luma_scale[2] = { 32U, 48U };
+    static const int8_t luma_shift[2] = { -3, 4 };
+    static const uint8_t chroma_scale[2] = { 28U, 52U };
+    static const int8_t chroma_shift[2] = { -7, 9 };
+    test_bitwriter writer;
+    cavs_slice_context context;
+    cavs_slice_header slice;
+    unsigned index;
+
+    memset(&context, 0, sizeof(context));
+    memset(&writer, 0, sizeof(writer));
+    context.profile_id = UINT8_C(0x20);
+    context.vertical_size = 576U;
+    context.macroblock_height = 36U;
+    context.picture_type = CAVS_PICTURE_I;
+    context.picture_structure = 1U;
+    context.picture_qp = 20U;
+    write_bits(&writer, 1U, 1U);
+    write_bits(&writer, 27U, 6U);
+    assert(cavs_parse_slice_header(UINT8_C(0x12), writer.data,
+                                   writer.position, &context, &slice) == CAVS_OK);
+    assert(slice.macroblock_row == 18U && slice.fixed_slice_qp == 1U);
+    assert(slice.slice_qp == 27U && slice.header_bits == 7U);
+
+    memset(&writer, 0, sizeof(writer));
+    context.vertical_size = 3008U;
+    context.macroblock_height = 188U;
+    context.fixed_picture_qp = 1U;
+    context.picture_qp = 19U;
+    write_bits(&writer, 1U, 3U);
+    assert(cavs_parse_slice_header(0U, writer.data, writer.position,
+                                   &context, &slice) == CAVS_OK);
+    assert(slice.macroblock_row == 128U && slice.slice_qp == 19U);
+    assert(slice.header_bits == 3U);
+
+    memset(&writer, 0, sizeof(writer));
+    context.profile_id = UINT8_C(0x48);
+    context.vertical_size = 1080U;
+    context.macroblock_height = 68U;
+    context.picture_type = CAVS_PICTURE_P;
+    context.picture_structure = 1U;
+    context.fixed_picture_qp = 0U;
+    context.picture_qp = 24U;
+    context.advanced_entropy_enabled = 1U;
+    context.number_of_references = 2U;
+    write_bits(&writer, 0U, 1U);
+    write_bits(&writer, 22U, 6U);
+    write_bits(&writer, 1U, 1U);
+    for (index = 0U; index < 2U; ++index) {
+        write_bits(&writer, luma_scale[index], 8U);
+        write_signed_byte(&writer, luma_shift[index]);
+        write_bits(&writer, 1U, 1U);
+        write_bits(&writer, chroma_scale[index], 8U);
+        write_signed_byte(&writer, chroma_shift[index]);
+        write_bits(&writer, 1U, 1U);
+    }
+    write_bits(&writer, 1U, 1U);
+    while ((writer.position & 7U) != 0U) write_bits(&writer, 1U, 1U);
+    assert(cavs_parse_slice_header(3U, writer.data, writer.position,
+                                   &context, &slice) == CAVS_OK);
+    assert(slice.macroblock_row == 3U && slice.slice_qp == 22U);
+    assert(slice.slice_weighting_flag == 1U && slice.number_of_references == 2U);
+    assert(slice.luma_scale[0] == 32U && slice.luma_shift[0] == -3);
+    assert(slice.chroma_scale[1] == 52U && slice.chroma_shift[1] == 9);
+    assert(slice.mb_weighting_flag == 1U && slice.header_bits == writer.position);
+}
+
 /* Entry point called by the shared unit-test executable. */
 void test_syntax(void) {
     test_start_codes();
     test_sequence_headers();
     test_i_picture_headers();
     test_pb_picture_headers();
+    test_slice_headers();
 }
