@@ -79,6 +79,8 @@ int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
         int32_t matrix[64];
         int16_t residual[64];
         cavs_intra_references_8x8 references;
+        cavs_intra_availability_8x8 availability;
+        uint8_t reference_plane[16U * 16U];
         uint8_t prediction[64];
         uint8_t reconstructed[64];
         uint8_t weights[64];
@@ -102,6 +104,14 @@ int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
             references.left[index] = data[(index * 7U) % size];
         }
         references.left[0] = references.top[0];
+        for (index = 0U; index < sizeof(reference_plane); ++index)
+            reference_plane[index] = data[index % size];
+        availability.top = size > 1U ? (uint16_t)(data[0] | data[1] << 8U) : 0U;
+        availability.left = size > 2U ? (uint16_t)(data[1] | data[2] << 8U) : 0U;
+        availability.top_left = data[0] & 1U;
+        (void)cavs_acquire_intra_references_8x8(
+            reference_plane, 16U, 16U, 16U, 8U, 8U,
+            &availability, &references);
         (void)cavs_predict_intra_luma_8x8(
             &references, (cavs_intra_luma_mode_8x8)(data[0] % 5U), prediction);
         (void)cavs_predict_intra_chroma_8x8(

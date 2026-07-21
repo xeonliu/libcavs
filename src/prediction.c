@@ -6,6 +6,7 @@
  * 9.9.1-9.9.4, Tables 65-66, Figure 20, and 9.11.
  */
 #include "prediction.h"
+#include <string.h>
 
 #define REFERENCE_MASK_8X8 UINT32_C(0x1ffff)
 
@@ -48,6 +49,62 @@ static uint8_t clip_sample(int64_t value) {
     if (value < 0) return 0U;
     if (value > 255) return 255U;
     return (uint8_t)value;
+}
+
+cavs_result cavs_acquire_intra_references_8x8(
+    const uint8_t *plane, size_t width, size_t height, size_t stride,
+    size_t x0, size_t y0, const cavs_intra_availability_8x8 *availability,
+    cavs_intra_references_8x8 *references) {
+    cavs_intra_references_8x8 acquired;
+    unsigned index;
+    if (plane == NULL || availability == NULL || references == NULL ||
+        width == 0U || height == 0U || stride < width || x0 > width - 1U ||
+        y0 > height - 1U || width - x0 < 8U || height - y0 < 8U ||
+        availability->top_left > 1U)
+        return CAVS_ERR_INVALID_ARGUMENT;
+    if (height - 1U > (SIZE_MAX - (width - 1U)) / stride)
+        return CAVS_ERR_INVALID_ARGUMENT;
+
+    memset(&acquired, 0, sizeof(acquired));
+    for (index = 1U; index <= 16U; ++index) {
+        size_t offset = (size_t)index - 1U;
+        uint32_t bit = UINT32_C(1) << index;
+        int top = y0 != 0U && offset < width - x0 &&
+                  (availability->top & (UINT16_C(1) << (index - 1U))) != 0U;
+        int left = x0 != 0U && offset < height - y0 &&
+                   (availability->left & (UINT16_C(1) << (index - 1U))) != 0U;
+        if (top) {
+            acquired.top[index] = plane[(y0 - 1U) * stride + x0 + offset];
+            acquired.top_available |= bit;
+        } else if (index > 8U &&
+                   (acquired.top_available & (UINT32_C(1) << 8U)) != 0U) {
+            acquired.top[index] = acquired.top[8];
+            acquired.top_available |= bit;
+        }
+        if (left) {
+            acquired.left[index] = plane[(y0 + offset) * stride + x0 - 1U];
+            acquired.left_available |= bit;
+        } else if (index > 8U &&
+                   (acquired.left_available & (UINT32_C(1) << 8U)) != 0U) {
+            acquired.left[index] = acquired.left[8];
+            acquired.left_available |= bit;
+        }
+    }
+
+    if (x0 != 0U && y0 != 0U && availability->top_left != 0U) {
+        acquired.top[0] = plane[(y0 - 1U) * stride + x0 - 1U];
+        acquired.top_available |= 1U;
+    } else if ((acquired.top_available & 2U) != 0U) {
+        acquired.top[0] = acquired.top[1];
+        acquired.top_available |= 1U;
+    } else if ((acquired.left_available & 2U) != 0U) {
+        acquired.top[0] = acquired.left[1];
+        acquired.top_available |= 1U;
+    }
+    acquired.left[0] = acquired.top[0];
+    acquired.left_available |= acquired.top_available & 1U;
+    *references = acquired;
+    return CAVS_OK;
 }
 
 static void predict_dc(const cavs_intra_references_8x8 *references,

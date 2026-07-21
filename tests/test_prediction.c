@@ -12,6 +12,7 @@
 
 #define ALL_REFERENCES UINT32_C(0x1ffff)
 #define DC_REFERENCES UINT32_C(0x003ff)
+#define ALL_ACQUISITION_SAMPLES UINT16_C(0xffff)
 
 static int64_t floor_shift(int64_t value, unsigned shift) {
     int64_t divisor = INT64_C(1) << shift;
@@ -44,6 +45,146 @@ static cavs_intra_references_8x8 make_references(void) {
     references.top_available = ALL_REFERENCES;
     references.left_available = ALL_REFERENCES;
     return references;
+}
+
+static void fill_plane(uint8_t *plane, size_t width, size_t height,
+                       size_t stride) {
+    size_t x;
+    size_t y;
+    for (y = 0U; y < height; ++y)
+        for (x = 0U; x < width; ++x)
+            plane[y * stride + x] = (uint8_t)((y * 31U + x * 7U) & 255U);
+}
+
+static cavs_intra_availability_8x8 all_available(void) {
+    cavs_intra_availability_8x8 availability;
+    availability.top = ALL_ACQUISITION_SAMPLES;
+    availability.left = ALL_ACQUISITION_SAMPLES;
+    availability.top_left = 1U;
+    return availability;
+}
+
+static void test_reference_acquisition_interior(void) {
+    uint8_t plane[24U * 24U];
+    cavs_intra_availability_8x8 availability = all_available();
+    cavs_intra_references_8x8 references;
+    unsigned index;
+    fill_plane(plane, 24U, 24U, 24U);
+    assert(cavs_acquire_intra_references_8x8(
+               plane, 24U, 24U, 24U, 4U, 4U, &availability,
+               &references) == CAVS_OK);
+    assert(references.top[0] == plane[3U * 24U + 3U]);
+    assert(references.left[0] == references.top[0]);
+    for (index = 1U; index <= 16U; ++index) {
+        assert(references.top[index] == plane[3U * 24U + 3U + index]);
+        assert(references.left[index] == plane[(3U + index) * 24U + 3U]);
+    }
+    assert(references.top_available == ALL_REFERENCES);
+    assert(references.left_available == ALL_REFERENCES);
+}
+
+static void test_reference_acquisition_extension(void) {
+    uint8_t plane[20U * 20U];
+    cavs_intra_availability_8x8 availability = all_available();
+    cavs_intra_references_8x8 references;
+    unsigned index;
+    fill_plane(plane, 20U, 20U, 20U);
+    assert(cavs_acquire_intra_references_8x8(
+               plane, 20U, 20U, 20U, 12U, 12U, &availability,
+               &references) == CAVS_OK);
+    for (index = 9U; index <= 16U; ++index) {
+        assert(references.top[index] == references.top[8]);
+        assert(references.left[index] == references.left[8]);
+    }
+    assert(references.top_available == ALL_REFERENCES);
+    assert(references.left_available == ALL_REFERENCES);
+
+    availability.top &= (uint16_t)~(UINT16_C(1) << 3U);
+    availability.top &= (uint16_t)~(UINT16_C(1) << 9U);
+    assert(cavs_acquire_intra_references_8x8(
+               plane, 20U, 20U, 20U, 2U, 2U, &availability,
+               &references) == CAVS_OK);
+    assert((references.top_available & (UINT32_C(1) << 4U)) == 0U);
+    assert(references.top[4] == 0U);
+    assert((references.top_available & (UINT32_C(1) << 10U)) != 0U);
+    assert(references.top[10] == references.top[8]);
+}
+
+static void test_reference_acquisition_top_left_fallback(void) {
+    uint8_t plane[24U * 24U];
+    cavs_intra_availability_8x8 availability = all_available();
+    cavs_intra_references_8x8 references;
+    fill_plane(plane, 24U, 24U, 24U);
+    availability.top_left = 0U;
+    assert(cavs_acquire_intra_references_8x8(
+               plane, 24U, 24U, 24U, 4U, 4U, &availability,
+               &references) == CAVS_OK);
+    assert(references.top[0] == references.top[1]);
+
+    availability.top &= (uint16_t)~UINT16_C(1);
+    assert(cavs_acquire_intra_references_8x8(
+               plane, 24U, 24U, 24U, 4U, 4U, &availability,
+               &references) == CAVS_OK);
+    assert(references.top[0] == references.left[1]);
+
+    availability.left &= (uint16_t)~UINT16_C(1);
+    assert(cavs_acquire_intra_references_8x8(
+               plane, 24U, 24U, 24U, 4U, 4U, &availability,
+               &references) == CAVS_OK);
+    assert((references.top_available & 1U) == 0U);
+    assert((references.left_available & 1U) == 0U);
+}
+
+static void test_reference_acquisition_picture_edges(void) {
+    uint8_t plane[16U * 16U];
+    cavs_intra_availability_8x8 availability = all_available();
+    cavs_intra_references_8x8 references;
+    fill_plane(plane, 16U, 16U, 16U);
+    assert(cavs_acquire_intra_references_8x8(
+               plane, 16U, 16U, 16U, 0U, 8U, &availability,
+               &references) == CAVS_OK);
+    assert(references.left_available == (references.top_available & 1U));
+    assert(references.top[0] == references.top[1]);
+
+    assert(cavs_acquire_intra_references_8x8(
+               plane, 16U, 16U, 16U, 8U, 0U, &availability,
+               &references) == CAVS_OK);
+    assert(references.top_available == (references.left_available & 1U));
+    assert(references.top[0] == references.left[1]);
+
+    assert(cavs_acquire_intra_references_8x8(
+               plane, 16U, 16U, 16U, 0U, 0U, &availability,
+               &references) == CAVS_OK);
+    assert(references.top_available == 0U);
+    assert(references.left_available == 0U);
+}
+
+static void test_reference_acquisition_invalid(void) {
+    uint8_t plane[16U * 16U];
+    cavs_intra_availability_8x8 availability = all_available();
+    cavs_intra_references_8x8 references;
+    cavs_intra_references_8x8 unchanged;
+    fill_plane(plane, 16U, 16U, 16U);
+    memset(&references, 0xa5, sizeof(references));
+    unchanged = references;
+    assert(cavs_acquire_intra_references_8x8(
+               plane, 16U, 16U, 15U, 0U, 0U, &availability,
+               &references) == CAVS_ERR_INVALID_ARGUMENT);
+    assert(memcmp(&references, &unchanged, sizeof(references)) == 0);
+    assert(cavs_acquire_intra_references_8x8(
+               plane, 16U, 16U, 16U, 9U, 0U, &availability,
+               &references) == CAVS_ERR_INVALID_ARGUMENT);
+    availability.top_left = 2U;
+    assert(cavs_acquire_intra_references_8x8(
+               plane, 16U, 16U, 16U, 0U, 0U, &availability,
+               &references) == CAVS_ERR_INVALID_ARGUMENT);
+    availability.top_left = 1U;
+    assert(cavs_acquire_intra_references_8x8(
+               plane, 8U, 8U, SIZE_MAX, 0U, 0U, &availability,
+               &references) == CAVS_ERR_INVALID_ARGUMENT);
+    assert(cavs_acquire_intra_references_8x8(
+               NULL, 16U, 16U, 16U, 0U, 0U, &availability,
+               &references) == CAVS_ERR_INVALID_ARGUMENT);
 }
 
 static void test_luma_modes(void) {
@@ -286,14 +427,40 @@ static void test_prediction_residual_pipeline(void) {
         assert(reconstructed[index] == 129U);
 }
 
+static void test_acquisition_prediction_pipeline(void) {
+    uint8_t plane[24U * 24U];
+    cavs_intra_availability_8x8 availability = all_available();
+    cavs_intra_references_8x8 references;
+    uint8_t prediction[64];
+    unsigned x;
+    unsigned y;
+    fill_plane(plane, 24U, 24U, 24U);
+    assert(cavs_acquire_intra_references_8x8(
+               plane, 24U, 24U, 24U, 8U, 8U, &availability,
+               &references) == CAVS_OK);
+    assert(cavs_predict_intra_luma_8x8(
+               &references, CAVS_INTRA_LUMA_VERTICAL_8X8,
+               prediction) == CAVS_OK);
+    for (y = 0U; y < 8U; ++y)
+        for (x = 0U; x < 8U; ++x)
+            assert(prediction[y * 8U + x] == plane[7U * 24U + 8U + x]);
+}
+
 void test_prediction(void) {
+    test_reference_acquisition_interior();
+    test_reference_acquisition_extension();
+    test_reference_acquisition_top_left_fallback();
+    test_reference_acquisition_picture_edges();
+    test_reference_acquisition_invalid();
     test_luma_modes();
     test_dc_availability();
     test_chroma_modes();
     test_invalid_references();
     test_sample_reconstruction();
     test_prediction_residual_pipeline();
+    test_acquisition_prediction_pipeline();
 }
 
+#undef ALL_ACQUISITION_SAMPLES
 #undef DC_REFERENCES
 #undef ALL_REFERENCES
