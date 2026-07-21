@@ -15,7 +15,7 @@ static void append_bits(uint8_t *destination, size_t *position,
                         uint8_t value, unsigned count) {
     unsigned index;
     for (index = 0; index < count; ++index) {
-        unsigned bit = (unsigned)((value >> (7U - index)) & 1U);
+        unsigned bit = ((unsigned)value >> (7U - index)) & 1U;
         size_t output_position = (*position)++;
         destination[output_position / 8U] |=
             (uint8_t)(bit << (7U - (output_position % 8U)));

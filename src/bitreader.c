@@ -40,7 +40,8 @@ int cavs_br_read(cavs_bitreader *br, unsigned count, uint32_t *value) {
         (size_t)count > cavs_br_bits_left(br)) return 0;
     for (i = 0; i < count; ++i) {
         size_t pos = br->bit_pos++;
-        out = (out << 1) | (uint32_t)((br->data[pos / 8U] >> (7U - (pos % 8U))) & 1U);
+        out = (out << 1) |
+              (((uint32_t)br->data[pos / 8U] >> (7U - (pos % 8U))) & UINT32_C(1));
     }
     *value = out;
     return 1;

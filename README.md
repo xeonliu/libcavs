@@ -16,6 +16,12 @@ cmake --build build
 ctest --test-dir build --output-on-failure
 ```
 
+`cavsdec [--frames N] [--log LEVEL] [--output FILE] input.avs` reads Annex-B
+input and writes decoded planar YUV frames when reconstruction is available.
+Use `-` for standard input or output. At the current syntax-only stage it
+validates and reports supported sequence and picture headers but emits no
+frames.
+
 See `docs/coverage.md` for implementation status and `CONTRIBUTING.md` for the
 source-control rules that apply to this independent rewrite.
 

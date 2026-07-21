@@ -22,6 +22,7 @@ outputs.
 | DPB, reordering, low delay, sequence switch | not-started | not-started | - |
 | Metadata and unknown extension retention | partial | partial | copied user-data and raw-extension API events; known metadata parsing pending |
 | BBV validation tooling | not-started | not-started | - |
+| `cavsdec` input, output, frame limit, and logging | partial | partial | file/stdin Annex-B scan and planar-output path; frame reconstruction pending |
 | Random-input robustness | partial | partial | libFuzzer and AFL public-API harness; 1,000-run sanitizer smoke test |
 
 No profile is currently advertised as decodable. Version 1.0 is blocked until
