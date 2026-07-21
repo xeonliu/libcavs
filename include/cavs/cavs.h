@@ -107,6 +107,12 @@ typedef struct cavs_event {
     size_t size;
 } cavs_event;
 
+/*
+ * Event data is owned by the decoder and remains valid until the next call to
+ * cavs_decoder_receive_event(), cavs_decoder_reset(), or
+ * cavs_decoder_destroy(). A frame has its own reference-counted lifetime.
+ */
+
 /** Creates a decoder using optional caller-provided allocation and logging. */
 CAVS_API cavs_result cavs_decoder_create(const cavs_decoder_config *config, cavs_decoder **decoder);
 

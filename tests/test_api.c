@@ -51,6 +51,8 @@ static void make_sequence_nal(uint8_t data[18]) {
 int main(void) {
     static const uint8_t picture_prefix[] = { 0, 0, 1, 0xb3 };
     static const uint8_t invalid_prefix[] = { 0, 0, 2, 0xb0 };
+    static const uint8_t user_data[] = { 0, 0, 1, 0xb2, 'a', 'v', 's' };
+    static const uint8_t extension[] = { 0, 0, 1, 0xb5, 0x91, 0x27 };
     uint8_t sequence_nal[18];
     cavs_decoder *decoder = NULL;
     cavs_decoder_config bad_config = { 0 };
@@ -72,6 +74,20 @@ int main(void) {
     assert(event.sequence.profile_id == UINT8_C(0x20));
     assert(event.sequence.display_width == 720U && event.sequence.display_height == 576U);
     assert(cavs_decoder_send_nal(decoder, &packet) == CAVS_OK);
+    assert(cavs_decoder_receive_event(decoder, &event) == CAVS_AGAIN);
+    packet.data = user_data;
+    packet.size = sizeof(user_data);
+    assert(cavs_decoder_send_nal(decoder, &packet) == CAVS_OK);
+    packet.data = extension;
+    packet.size = sizeof(extension);
+    assert(cavs_decoder_send_nal(decoder, &packet) == CAVS_AGAIN);
+    assert(cavs_decoder_receive_event(decoder, &event) == CAVS_OK);
+    assert(event.type == CAVS_EVENT_METADATA && event.size == 3U);
+    assert(memcmp(event.data, "avs", 3U) == 0);
+    assert(cavs_decoder_send_nal(decoder, &packet) == CAVS_OK);
+    assert(cavs_decoder_receive_event(decoder, &event) == CAVS_OK);
+    assert(event.type == CAVS_EVENT_RAW_EXTENSION && event.size == 2U);
+    assert(event.data[0] == UINT8_C(0x91) && event.data[1] == UINT8_C(0x27));
     assert(cavs_decoder_receive_event(decoder, &event) == CAVS_AGAIN);
     packet.data = invalid_prefix;
     packet.size = sizeof(invalid_prefix);

@@ -7,6 +7,7 @@
  */
 #include <cavs/cavs.h>
 #include "syntax.h"
+#include "pseudo_start_code.h"
 #include <stdlib.h>
 #include <string.h>
 #include <limits.h>
@@ -25,6 +26,11 @@ struct cavs_decoder {
     int sequence_pending;
     int has_sequence;
     cavs_sequence_info sequence;
+    cavs_event_type payload_event_type;
+    int payload_pending;
+    uint8_t *pending_payload;
+    size_t pending_payload_size;
+    uint8_t *delivered_payload;
 };
 
 /* Adapts the C runtime allocator to the public allocator callback signature. */
@@ -32,6 +38,49 @@ static void *default_alloc(void *opaque, size_t size) { (void)opaque; return mal
 
 /* Adapts the C runtime deallocator to the public allocator callback signature. */
 static void default_free(void *opaque, void *ptr) { (void)opaque; free(ptr); }
+
+/* Releases event payloads whose decoder-owned lifetime has ended. */
+static void free_payload(cavs_decoder *decoder, uint8_t **payload) {
+    if (*payload != NULL) {
+        decoder->config.free(decoder->config.allocator_opaque, *payload);
+        *payload = NULL;
+    }
+}
+
+/* Copies an opaque unit payload so input memory may expire after send_nal. */
+static cavs_result queue_payload(cavs_decoder *decoder, cavs_event_type type,
+                                 const uint8_t *data, size_t size) {
+    uint8_t *copy = NULL;
+    if (size != 0U) {
+        copy = (uint8_t *)decoder->config.alloc(decoder->config.allocator_opaque, size);
+        if (copy == NULL) return CAVS_ERR_OUT_OF_MEMORY;
+        memcpy(copy, data, size);
+    }
+    decoder->payload_event_type = type;
+    decoder->payload_pending = 1;
+    decoder->pending_payload = copy;
+    decoder->pending_payload_size = size;
+    return CAVS_OK;
+}
+
+/* Removes Annex A prevention bits before parsing standard-defined syntax. */
+static cavs_result parse_sequence_payload(cavs_decoder *decoder,
+                                          const uint8_t *data, size_t size,
+                                          cavs_sequence_info *sequence) {
+    uint8_t *decoded;
+    size_t output_bits;
+    cavs_result result;
+    if (size == 0U) return CAVS_ERR_CORRUPT_BITSTREAM;
+    decoded = (uint8_t *)decoder->config.alloc(decoder->config.allocator_opaque, size);
+    if (decoded == NULL) return CAVS_ERR_OUT_OF_MEMORY;
+    if (!cavs_remove_pseudo_start_codes(data, size, decoded, size, &output_bits)) {
+        decoder->config.free(decoder->config.allocator_opaque, decoded);
+        return CAVS_ERR_CORRUPT_BITSTREAM;
+    }
+    result = cavs_parse_sequence_header(decoded, output_bits / 8U, sequence);
+    decoder->config.free(decoder->config.allocator_opaque, decoded);
+    return result;
+}
 
 /* Validates configuration and creates an empty decoder state. */
 cavs_result cavs_decoder_create(const cavs_decoder_config *config, cavs_decoder **out) {
@@ -56,15 +105,22 @@ cavs_result cavs_decoder_send_nal(cavs_decoder *decoder, const cavs_packet *pack
     if (decoder == NULL || packet == NULL || packet->data == NULL || packet->size < 4U) return CAVS_ERR_INVALID_ARGUMENT;
     if (decoder->flushing) return CAVS_ERR_INVALID_STATE;
     if (packet->data[0] != 0U || packet->data[1] != 0U || packet->data[2] != 1U) return CAVS_ERR_CORRUPT_BITSTREAM;
-    if (decoder->sequence_pending) return CAVS_AGAIN;
+    if (decoder->sequence_pending || decoder->payload_pending) return CAVS_AGAIN;
     unit_type = cavs_classify_start_code(packet->data[3]);
     if (unit_type == CAVS_UNIT_SEQUENCE_END) {
         decoder->flushing = 1;
         decoder->end_pending = 1;
         return CAVS_OK;
     }
+    if (unit_type == CAVS_UNIT_USER_DATA)
+        return queue_payload(decoder, CAVS_EVENT_METADATA,
+                             packet->data + 4U, packet->size - 4U);
+    if (unit_type == CAVS_UNIT_EXTENSION)
+        return queue_payload(decoder, CAVS_EVENT_RAW_EXTENSION,
+                             packet->data + 4U, packet->size - 4U);
     if (unit_type != CAVS_UNIT_SEQUENCE_HEADER) return CAVS_ERR_UNSUPPORTED_PROFILE;
-    result = cavs_parse_sequence_header(packet->data + 4U, packet->size - 4U, &sequence);
+    result = parse_sequence_payload(decoder, packet->data + 4U,
+                                    packet->size - 4U, &sequence);
     if (result != CAVS_OK) return result;
     if (!decoder->has_sequence || memcmp(&decoder->sequence, &sequence, sizeof(sequence)) != 0) {
         decoder->sequence = sequence;
@@ -77,11 +133,22 @@ cavs_result cavs_decoder_send_nal(cavs_decoder *decoder, const cavs_packet *pack
 /* Returns queued events and models the terminal drain state. */
 cavs_result cavs_decoder_receive_event(cavs_decoder *decoder, cavs_event *event) {
     if (decoder == NULL || event == NULL) return CAVS_ERR_INVALID_ARGUMENT;
+    free_payload(decoder, &decoder->delivered_payload);
     memset(event, 0, sizeof(*event));
     if (decoder->sequence_pending) {
         decoder->sequence_pending = 0;
         event->type = CAVS_EVENT_SEQUENCE;
         event->sequence = decoder->sequence;
+        return CAVS_OK;
+    }
+    if (decoder->payload_pending) {
+        decoder->delivered_payload = decoder->pending_payload;
+        decoder->pending_payload = NULL;
+        decoder->payload_pending = 0;
+        event->type = decoder->payload_event_type;
+        event->data = decoder->delivered_payload;
+        event->size = decoder->pending_payload_size;
+        decoder->pending_payload_size = 0U;
         return CAVS_OK;
     }
     if (decoder->end_pending) { decoder->end_pending = 0; event->type = CAVS_EVENT_END; return CAVS_OK; }
@@ -102,13 +169,23 @@ cavs_result cavs_decoder_reset(cavs_decoder *decoder) {
     decoder->end_pending = 0;
     decoder->sequence_pending = 0;
     decoder->has_sequence = 0;
+    free_payload(decoder, &decoder->pending_payload);
+    free_payload(decoder, &decoder->delivered_payload);
+    decoder->payload_pending = 0;
+    decoder->pending_payload_size = 0U;
     memset(&decoder->sequence, 0, sizeof(decoder->sequence));
     return CAVS_OK;
 }
 
 /* Releases the decoder through the allocator selected at creation. */
 void cavs_decoder_destroy(cavs_decoder *decoder) {
-    if (decoder != NULL) decoder->config.free(decoder->config.allocator_opaque, decoder);
+    if (decoder != NULL) {
+        cavs_free_fn free_fn = decoder->config.free;
+        void *opaque = decoder->config.allocator_opaque;
+        free_payload(decoder, &decoder->pending_payload);
+        free_payload(decoder, &decoder->delivered_payload);
+        free_fn(opaque, decoder);
+    }
 }
 
 /* Increments a frame reference unless its counter is saturated. */

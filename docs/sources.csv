@@ -6,3 +6,5 @@ INFRA-004,Pseudo-start-code removal,GB/T 20090.16,2016,"Normative Annex A",,0x48
 SYNTAX-001,Start-code classification,GB/T 20090.2,2013,7.1,"Table 12",0x20,"Independent range and value mapping","Boundary and enumerated start-code tests",implemented
 SYNTAX-002,Common sequence header,GB/T 20090.2,2013,7.2.2,"Table 15; Tables 30-33; normative Annex B",0x20,"Direct field parsing and scoped constraint validation","Independent 112-bit baseline vector",implemented
 SYNTAX-003,Broadcast sequence header,GB/T 20090.16,2016,7.2.2,"Table 14; normative Annex B",0x48,"Direct field parsing and scoped constraint validation","Independent 112-bit broadcast vector",implemented
+SYNTAX-004,User data unit retention,GB/T 20090.2,2013,7.1;7.2.3,Table 12,0x20;0x48,"Copy bytes following the unit start code without interpretation","API lifetime and backpressure vectors",implemented
+SYNTAX-005,Unknown extension retention,GB/T 20090.2,2013,7.1;7.2.4,Table 12,0x20;0x48,"Copy bytes following the unit start code without interpretation","API binary payload vector",implemented
