@@ -7,6 +7,7 @@
 #include <cavs/cavs.h>
 #include "coefficients.h"
 #include "macroblock.h"
+#include "motion.h"
 #include "prediction.h"
 #include "reconstruction.h"
 #include <stddef.h>
@@ -83,6 +84,7 @@ int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
         uint8_t reference_plane[16U * 16U];
         uint8_t prediction[64];
         uint8_t reconstructed[64];
+        uint8_t motion_prediction[64];
         uint8_t weights[64];
         unsigned index;
         for (index = 0U; index < 64U; ++index) {
@@ -119,6 +121,12 @@ int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
         (void)cavs_reconstruct_samples_8x8(
             prediction, data[0] & 1U ? prediction : NULL,
             residual, reconstructed);
+        (void)cavs_interpolate_chroma_block(
+            reference_plane, 16U, 16U, 16U, 4U, 4U, 8U, 8U,
+            (int8_t)data[0], (int8_t)data[size - 1U],
+            data[0] & 1U ? CAVS_CHROMA_MOTION_EIGHTH
+                         : CAVS_CHROMA_MOTION_SIXTEENTH,
+            motion_prediction, 8U);
     }
     return 0;
 }
