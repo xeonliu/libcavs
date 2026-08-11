@@ -12,10 +12,10 @@ outputs.
 | Sequence header syntax and change events | partial | partial | `cavs_unit`, `cavs_api_test` |
 | Level identifier and profile-format constraints | partial | partial | identifier tests; level maxima pending |
 | Extension, picture, slice syntax | partial | partial | I/PB picture and target-profile slice header parsers; macroblocks pending |
-| Macroblock and block syntax | partial | not-started | baseline YUV420 basic-entropy 8x8 macroblock headers, full Table 45 mapping, and continuous six-block coefficient dispatch |
+| Macroblock and block syntax | partial | not-started | baseline YUV420 basic-entropy 8x8 macroblock headers, full Table 45 mapping, continuous six-block coefficient dispatch, and atomic six-block residual/sample reconstruction |
 | Basic/advanced entropy decoding | partial | not-started | baseline 8x8 basic entropy, Annex D Tables D.1-D.20, escape and inverse-run tests |
-| 4x4/8x8 inverse transform and quantization | partial | not-started | baseline 8x8 frame/field inverse scan, Table 70/71 inverse quantization, and T8 inverse transform; 4x4 and weighted modes pending |
-| Intra/inter prediction and compensation | partial | partial | baseline 8x8 intra path, common-profile neighbor prediction/difference decoding, P_Skip/symmetric/B_Direct vector derivation, all luma phases, chroma interpolation, edge replacement, and reconstruction; macroblock integration pending |
+| 4x4/8x8 inverse transform and quantization | partial | not-started | baseline 8x8 frame/field inverse scan, Table 70/71 inverse quantization, T8 inverse transform, and basic macroblock integration; 4x4 and weighted modes pending |
+| Intra/inter prediction and compensation | partial | partial | baseline 8x8 intra path, common-profile neighbor prediction/difference decoding, P_Skip/symmetric/B_Direct vector derivation, all luma phases, chroma interpolation, edge replacement, and block reconstruction; frame-level prediction/motion assembly pending |
 | Loop filtering | not-started | not-started | - |
 | YUV420P8 progressive frame I/P/B | not-started | not-started | - |
 | YUV422P8, interlace, field pictures | not-started | not-started | - |

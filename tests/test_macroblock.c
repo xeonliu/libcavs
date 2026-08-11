@@ -420,6 +420,64 @@ static void test_complete_macroblock_truncation_atomic(void) {
                &context, NULL) == CAVS_ERR_INVALID_ARGUMENT);
 }
 
+static void test_macroblock_reconstruction(void) {
+    cavs_baseline420_macroblock macroblock;
+    cavs_baseline420_macroblock unchanged_macroblock;
+    uint8_t forward[CAVS_BASELINE420_MB_BLOCKS][64];
+    uint8_t backward[CAVS_BASELINE420_MB_BLOCKS][64];
+    uint8_t reconstructed[CAVS_BASELINE420_MB_BLOCKS][64];
+    uint8_t unchanged[CAVS_BASELINE420_MB_BLOCKS][64];
+    unsigned sample;
+
+    memset(&macroblock, 0, sizeof(macroblock));
+    macroblock.header.qp = 0U;
+    macroblock.block_coded[0] = 1U;
+    macroblock.block[0].count = 1U;
+    macroblock.block[0].scan_coefficients[0] = 8;
+    macroblock.block_coded[4] = 1U;
+    macroblock.block[4].count = 1U;
+    macroblock.block[4].scan_coefficients[0] = 8;
+    memset(forward, 100, sizeof(forward));
+    memset(backward, 102, sizeof(backward));
+    assert(cavs_reconstruct_baseline420_macroblock(
+               &macroblock, CAVS_SCAN_8X8_FRAME, &forward[0][0],
+               &backward[0][0], &reconstructed[0][0]) == CAVS_OK);
+    for (sample = 0U; sample < 64U; ++sample) {
+        assert(reconstructed[0][sample] == 102U);
+        assert(reconstructed[4][sample] == 102U);
+        assert(reconstructed[1][sample] == 101U);
+    }
+    assert(cavs_reconstruct_baseline420_macroblock(
+               &macroblock, CAVS_SCAN_8X8_FRAME, &forward[0][0], NULL,
+               &reconstructed[0][0]) == CAVS_OK);
+    assert(reconstructed[0][0] == 101U && reconstructed[1][0] == 100U);
+
+    macroblock.block[0].scan_coefficients[63] = 2048;
+    memset(reconstructed, 0x5a, sizeof(reconstructed));
+    memcpy(unchanged, reconstructed, sizeof(unchanged));
+    assert(cavs_reconstruct_baseline420_macroblock(
+               &macroblock, CAVS_SCAN_8X8_FRAME, &forward[0][0], NULL,
+               &reconstructed[0][0]) == CAVS_ERR_CORRUPT_BITSTREAM);
+    assert(memcmp(reconstructed, unchanged, sizeof(reconstructed)) == 0);
+    macroblock.block[0].scan_coefficients[63] = 0;
+    macroblock.block_coded[0] = 2U;
+    unchanged_macroblock = macroblock;
+    assert(cavs_reconstruct_baseline420_macroblock(
+               &macroblock, CAVS_SCAN_8X8_FRAME, &forward[0][0], NULL,
+               &reconstructed[0][0]) == CAVS_ERR_INVALID_ARGUMENT);
+    assert(memcmp(&macroblock, &unchanged_macroblock,
+                  sizeof(macroblock)) == 0);
+    macroblock.block_coded[0] = 0U;
+    assert(cavs_reconstruct_baseline420_macroblock(
+               &macroblock, (cavs_scan_mode_8x8)2, &forward[0][0], NULL,
+               &reconstructed[0][0]) == CAVS_ERR_INVALID_ARGUMENT);
+    macroblock.block_coded[0] = 1U;
+    macroblock.block[0].count = 0U;
+    assert(cavs_reconstruct_baseline420_macroblock(
+               &macroblock, CAVS_SCAN_8X8_FRAME, &forward[0][0], NULL,
+               &reconstructed[0][0]) == CAVS_ERR_CORRUPT_BITSTREAM);
+}
+
 void test_macroblock(void) {
     test_implicit_i_macroblock();
     test_p_skip_and_partitions();
@@ -431,4 +489,5 @@ void test_macroblock(void) {
     test_complete_i_macroblock_cursor();
     test_complete_inter_and_empty_macroblocks();
     test_complete_macroblock_truncation_atomic();
+    test_macroblock_reconstruction();
 }

@@ -10,6 +10,7 @@
 #include "macroblock.h"
 #include "bitreader.h"
 #include "safe.h"
+#include "prediction.h"
 #include <string.h>
 
 /* Independently transcribed intra/inter columns of Table 45. */
@@ -232,5 +233,66 @@ cavs_result cavs_decode_baseline420_macroblock(
     }
     parsed.end_bit_offset = cursor;
     *macroblock = parsed;
+    return CAVS_OK;
+}
+
+cavs_result cavs_reconstruct_baseline420_macroblock(
+    const cavs_baseline420_macroblock *macroblock,
+    cavs_scan_mode_8x8 scan_mode,
+    const uint8_t *forward,
+    const uint8_t *backward,
+    uint8_t *reconstructed) {
+    int32_t predicted_quant[CAVS_BLOCK_8X8_COEFFICIENTS];
+    uint8_t weights[CAVS_BLOCK_8X8_COEFFICIENTS];
+    uint8_t parsed[CAVS_BASELINE420_MB_BLOCKS]
+                 [CAVS_BLOCK_8X8_COEFFICIENTS];
+    uint8_t chroma_qp;
+    unsigned index;
+
+    if (macroblock == NULL || forward == NULL || reconstructed == NULL)
+        return CAVS_ERR_INVALID_ARGUMENT;
+    if (scan_mode != CAVS_SCAN_8X8_FRAME && scan_mode != CAVS_SCAN_8X8_FIELD)
+        return CAVS_ERR_INVALID_ARGUMENT;
+    if (macroblock->header.qp > 63U)
+        return CAVS_ERR_INVALID_ARGUMENT;
+    if (cavs_map_chroma_qp(macroblock->header.qp, 0, &chroma_qp) != CAVS_OK)
+        return CAVS_ERR_CORRUPT_BITSTREAM;
+
+    memset(predicted_quant, 0, sizeof(predicted_quant));
+    memset(weights, 128, sizeof(weights));
+    memset(parsed, 0, sizeof(parsed));
+    for (index = 0U; index < CAVS_BASELINE420_MB_BLOCKS; ++index) {
+        int32_t quant[CAVS_BLOCK_8X8_COEFFICIENTS];
+        int32_t coefficients[CAVS_BLOCK_8X8_COEFFICIENTS];
+        int16_t residual[CAVS_BLOCK_8X8_COEFFICIENTS];
+        uint8_t qp = index < 4U ? macroblock->header.qp : chroma_qp;
+        cavs_result result;
+
+        if (macroblock->block_coded[index] > 1U)
+            return CAVS_ERR_INVALID_ARGUMENT;
+        if (macroblock->block_coded[index] != 0U) {
+            if (macroblock->block[index].count == 0U ||
+                macroblock->block[index].count >
+                    CAVS_COEFFICIENT_COUNT_8X8)
+                return CAVS_ERR_CORRUPT_BITSTREAM;
+            result = cavs_inverse_scan_8x8(
+                macroblock->block[index].scan_coefficients, scan_mode, quant);
+            if (result != CAVS_OK) return result;
+            result = cavs_inverse_quantize_8x8(
+                quant, predicted_quant, weights, qp, coefficients);
+            if (result != CAVS_OK) return result;
+            result = cavs_inverse_transform_8x8(coefficients, residual);
+            if (result != CAVS_OK) return result;
+        } else {
+            memset(residual, 0, sizeof(residual));
+        }
+        result = cavs_reconstruct_samples_8x8(
+            forward + index * CAVS_BLOCK_8X8_COEFFICIENTS,
+            backward == NULL ? NULL :
+                backward + index * CAVS_BLOCK_8X8_COEFFICIENTS,
+            residual, parsed[index]);
+        if (result != CAVS_OK) return result;
+    }
+    memcpy(reconstructed, parsed, sizeof(parsed));
     return CAVS_OK;
 }

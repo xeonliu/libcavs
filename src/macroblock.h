@@ -9,6 +9,7 @@
 
 #include <cavs/cavs.h>
 #include "coefficients.h"
+#include "reconstruction.h"
 #include <stddef.h>
 #include <stdint.h>
 
@@ -73,5 +74,18 @@ cavs_result cavs_decode_baseline420_macroblock(
     const uint8_t *data, size_t bit_size, size_t bit_offset,
     const cavs_baseline420_mb_context *context,
     cavs_baseline420_macroblock *macroblock);
+
+/*
+ * Reconstructs the six basic-entropy blocks from a decoded macroblock. The
+ * forward and reconstructed buffers contain six consecutive 64-byte blocks;
+ * backward may be NULL for single-prediction reconstruction. Block order is
+ * four luma blocks followed by Cb and Cr.
+ */
+cavs_result cavs_reconstruct_baseline420_macroblock(
+    const cavs_baseline420_macroblock *macroblock,
+    cavs_scan_mode_8x8 scan_mode,
+    const uint8_t *forward,
+    const uint8_t *backward,
+    uint8_t *reconstructed);
 
 #endif
