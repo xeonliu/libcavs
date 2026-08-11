@@ -478,6 +478,81 @@ static void test_macroblock_reconstruction(void) {
                &reconstructed[0][0]) == CAVS_ERR_CORRUPT_BITSTREAM);
 }
 
+static void fill_macroblock_references(
+    cavs_intra_references_8x8 *references, unsigned seed) {
+    unsigned index;
+    memset(references, 0, sizeof(*references));
+    references->top_available = UINT32_C(0x1ffff);
+    references->left_available = UINT32_C(0x1ffff);
+    for (index = 0U; index < 17U; ++index) {
+        references->top[index] = (uint8_t)(seed + index * 7U);
+        references->left[index] = (uint8_t)(seed + 80U + index * 5U);
+    }
+    references->left[0] = references->top[0];
+}
+
+static void test_intra_macroblock_mode_assembly(void) {
+    cavs_baseline420_macroblock macroblock;
+    cavs_intra_references_8x8 luma_references[4];
+    cavs_intra_references_8x8 chroma_references[2];
+    uint8_t predicted_modes[4] = { 0U, 1U, 2U, 3U };
+    uint8_t forward[6U * 64U];
+    uint8_t expected[64];
+    unsigned index;
+
+    memset(&macroblock, 0, sizeof(macroblock));
+    macroblock.header.is_intra = 1U;
+    macroblock.header.intra_chroma_prediction_mode =
+        CAVS_INTRA_CHROMA_PLANE_8X8;
+    for (index = 0U; index < 4U; ++index) {
+        fill_macroblock_references(&luma_references[index], index * 11U);
+        macroblock.header.prediction_mode_flag[index] = 1U;
+    }
+    fill_macroblock_references(&chroma_references[0], 33U);
+    fill_macroblock_references(&chroma_references[1], 49U);
+    assert(cavs_predict_baseline420_intra_macroblock(
+               &macroblock, luma_references, chroma_references,
+               predicted_modes, forward) == CAVS_OK);
+    assert(cavs_predict_intra_luma_8x8(
+               &luma_references[0], CAVS_INTRA_LUMA_VERTICAL_8X8,
+               expected) == CAVS_OK);
+    assert(memcmp(forward, expected, sizeof(expected)) == 0);
+    assert(cavs_predict_intra_chroma_8x8(
+               &chroma_references[0], CAVS_INTRA_CHROMA_PLANE_8X8,
+               expected) == CAVS_OK);
+    assert(memcmp(forward + 4U * 64U, expected, sizeof(expected)) == 0);
+
+    for (index = 0U; index < 4U; ++index) {
+        macroblock.header.prediction_mode_flag[index] = 0U;
+        macroblock.header.intra_luma_prediction_mode[index] =
+            predicted_modes[index];
+    }
+    assert(cavs_predict_baseline420_intra_macroblock(
+               &macroblock, luma_references, chroma_references,
+               predicted_modes, forward) == CAVS_OK);
+    assert(cavs_predict_intra_luma_8x8(
+               &luma_references[0], CAVS_INTRA_LUMA_HORIZONTAL_8X8,
+               expected) == CAVS_OK);
+    assert(memcmp(forward, expected, sizeof(expected)) == 0);
+    assert(cavs_predict_intra_luma_8x8(
+               &luma_references[3], CAVS_INTRA_LUMA_DOWN_RIGHT_8X8,
+               expected) == CAVS_OK);
+    assert(memcmp(forward + 3U * 64U, expected, sizeof(expected)) == 0);
+
+    memset(forward, 0xa5, sizeof(forward));
+    macroblock.header.intra_luma_prediction_mode[0] = 4U;
+    assert(cavs_predict_baseline420_intra_macroblock(
+               &macroblock, luma_references, chroma_references,
+               predicted_modes, forward) == CAVS_ERR_CORRUPT_BITSTREAM);
+    for (index = 0U; index < sizeof(forward); ++index)
+        assert(forward[index] == 0xa5U);
+    macroblock.header.intra_luma_prediction_mode[0] = 0U;
+    macroblock.header.is_intra = 0U;
+    assert(cavs_predict_baseline420_intra_macroblock(
+               &macroblock, luma_references, chroma_references,
+               predicted_modes, forward) == CAVS_ERR_INVALID_ARGUMENT);
+}
+
 void test_macroblock(void) {
     test_implicit_i_macroblock();
     test_p_skip_and_partitions();
@@ -490,4 +565,5 @@ void test_macroblock(void) {
     test_complete_inter_and_empty_macroblocks();
     test_complete_macroblock_truncation_atomic();
     test_macroblock_reconstruction();
+    test_intra_macroblock_mode_assembly();
 }

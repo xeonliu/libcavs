@@ -296,3 +296,62 @@ cavs_result cavs_reconstruct_baseline420_macroblock(
     memcpy(reconstructed, parsed, sizeof(parsed));
     return CAVS_OK;
 }
+
+static cavs_result resolve_intra_luma_mode(
+    const cavs_baseline420_mb_header *header, unsigned index,
+    const uint8_t *predicted_modes, uint8_t *mode) {
+    uint8_t coded;
+    uint8_t predicted;
+    if (header->prediction_mode_flag[index] > 1U || predicted_modes[index] > 4U)
+        return CAVS_ERR_INVALID_ARGUMENT;
+    predicted = predicted_modes[index];
+    if (header->prediction_mode_flag[index] != 0U) {
+        *mode = predicted;
+        return CAVS_OK;
+    }
+    coded = header->intra_luma_prediction_mode[index];
+    if (coded > 3U) return CAVS_ERR_CORRUPT_BITSTREAM;
+    *mode = coded < predicted ? coded : (uint8_t)(coded + 1U);
+    return CAVS_OK;
+}
+
+cavs_result cavs_predict_baseline420_intra_macroblock(
+    const cavs_baseline420_macroblock *macroblock,
+    const cavs_intra_references_8x8 *luma_references,
+    const cavs_intra_references_8x8 *chroma_references,
+    const uint8_t *predicted_luma_modes,
+    uint8_t *forward) {
+    uint8_t parsed[CAVS_BASELINE420_MB_BLOCKS]
+                 [CAVS_BLOCK_8X8_COEFFICIENTS];
+    unsigned index;
+
+    if (macroblock == NULL || luma_references == NULL ||
+        chroma_references == NULL || predicted_luma_modes == NULL ||
+        forward == NULL)
+        return CAVS_ERR_INVALID_ARGUMENT;
+    if (macroblock->header.is_intra == 0U)
+        return CAVS_ERR_INVALID_ARGUMENT;
+    if (macroblock->header.intra_chroma_prediction_mode > 3U)
+        return CAVS_ERR_CORRUPT_BITSTREAM;
+    memset(parsed, 0, sizeof(parsed));
+    for (index = 0U; index < 4U; ++index) {
+        uint8_t mode;
+        cavs_result result = resolve_intra_luma_mode(
+            &macroblock->header, index, predicted_luma_modes, &mode);
+        if (result != CAVS_OK) return result;
+        result = cavs_predict_intra_luma_8x8(
+            luma_references + index, (cavs_intra_luma_mode_8x8)mode,
+            parsed[index]);
+        if (result != CAVS_OK) return result;
+    }
+    for (index = 0U; index < 2U; ++index) {
+        cavs_result result = cavs_predict_intra_chroma_8x8(
+            chroma_references + index,
+            (cavs_intra_chroma_mode_8x8)
+                macroblock->header.intra_chroma_prediction_mode,
+            parsed[index + 4U]);
+        if (result != CAVS_OK) return result;
+    }
+    memcpy(forward, parsed, sizeof(parsed));
+    return CAVS_OK;
+}

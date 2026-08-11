@@ -9,6 +9,7 @@
 
 #include <cavs/cavs.h>
 #include "coefficients.h"
+#include "prediction.h"
 #include "reconstruction.h"
 #include <stddef.h>
 #include <stdint.h>
@@ -87,5 +88,19 @@ cavs_result cavs_reconstruct_baseline420_macroblock(
     const uint8_t *forward,
     const uint8_t *backward,
     uint8_t *reconstructed);
+
+/*
+ * Resolves 9.4.4 macroblock intra modes and produces six prediction blocks.
+ * luma_references contains four consecutive 8x8 reference sets and
+ * chroma_references contains Cb followed by Cr. predicted_luma_modes holds
+ * the mode predicted from already-decoded neighboring blocks for each luma
+ * block. The output contains six consecutive 64-byte blocks.
+ */
+cavs_result cavs_predict_baseline420_intra_macroblock(
+    const cavs_baseline420_macroblock *macroblock,
+    const cavs_intra_references_8x8 *luma_references,
+    const cavs_intra_references_8x8 *chroma_references,
+    const uint8_t *predicted_luma_modes,
+    uint8_t *forward);
 
 #endif
