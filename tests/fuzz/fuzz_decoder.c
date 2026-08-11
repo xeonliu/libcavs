@@ -54,6 +54,7 @@ int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
         cavs_basic_coefficients coefficients;
         cavs_baseline420_mb_context context;
         cavs_baseline420_mb_header header;
+        cavs_baseline420_macroblock macroblock;
         memset(&context, 0, sizeof(context));
         context.profile_id = UINT8_C(0x20);
         context.format = CAVS_YUV420P8;
@@ -70,6 +71,8 @@ int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
         context.macroblock_index = size > 8U ? data[8] & 3U : 0U;
         (void)cavs_parse_baseline420_mb_header(data, size * 8U, 0U,
                                                &context, &header);
+        (void)cavs_decode_baseline420_macroblock(
+            data, size * 8U, 0U, &context, &macroblock);
         (void)cavs_decode_basic_coefficients_8x8(
             data, size * 8U, 0U,
             (cavs_basic_block_kind)(data[0] % 3U), &coefficients);

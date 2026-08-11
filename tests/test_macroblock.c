@@ -39,6 +39,31 @@ static void write_se(mb_bitwriter *writer, int32_t value) {
     write_ue(writer, code);
 }
 
+static void write_ue_k(mb_bitwriter *writer, uint32_t value, unsigned order) {
+    unsigned zeros = 0U;
+    unsigned suffix_bits;
+    uint64_t base;
+    uint64_t span;
+    for (;;) {
+        suffix_bits = zeros + order;
+        base = (UINT64_C(1) << suffix_bits) - (UINT64_C(1) << order);
+        span = UINT64_C(1) << suffix_bits;
+        if ((uint64_t)value < base + span) break;
+        ++zeros;
+    }
+    write_bits(writer, 0U, zeros);
+    write_bits(writer, 1U, 1U);
+    write_bits(writer, (uint32_t)((uint64_t)value - base), suffix_bits);
+}
+
+static void write_single_coefficient(mb_bitwriter *writer,
+                                     cavs_basic_block_kind kind) {
+    write_ue_k(writer, 0U, kind == CAVS_BASIC_INTER_LUMA ? 3U : 2U);
+    write_ue_k(writer, kind == CAVS_BASIC_INTRA_LUMA ? 8U :
+                       (kind == CAVS_BASIC_INTER_LUMA ? 2U : 0U),
+               kind == CAVS_BASIC_CHROMA ? 0U : 2U);
+}
+
 static cavs_baseline420_mb_context default_context(cavs_picture_type picture_type) {
     cavs_baseline420_mb_context context;
     memset(&context, 0, sizeof(context));
@@ -303,6 +328,98 @@ static void test_invalid_macroblocks(void) {
            CAVS_ERR_CORRUPT_BITSTREAM);
 }
 
+static void write_full_i_macroblock(mb_bitwriter *writer) {
+    unsigned index;
+    write_intra_prediction(writer);
+    for (index = 0U; index < CAVS_BASELINE420_MB_BLOCKS; ++index)
+        write_single_coefficient(writer, index < 4U ?
+            CAVS_BASIC_INTRA_LUMA : CAVS_BASIC_CHROMA);
+}
+
+static void test_complete_i_macroblock_cursor(void) {
+    cavs_baseline420_mb_context context = default_context(CAVS_PICTURE_I);
+    cavs_baseline420_macroblock first;
+    cavs_baseline420_macroblock second;
+    mb_bitwriter writer;
+    size_t boundary;
+    unsigned index;
+    memset(&writer, 0, sizeof(writer));
+    context.fixed_qp = 1U;
+    context.macroblock_height = 1U;
+    write_full_i_macroblock(&writer);
+    boundary = writer.position;
+    write_full_i_macroblock(&writer);
+    assert((boundary & 7U) != 0U);
+    assert(cavs_decode_baseline420_macroblock(
+               writer.data, writer.position, 0U, &context, &first) == CAVS_OK);
+    assert(first.header.is_intra == 1U && first.header.qp == 20U);
+    assert(first.header.coded_block_pattern == 63U);
+    assert(first.end_bit_offset == boundary);
+    for (index = 0U; index < CAVS_BASELINE420_MB_BLOCKS; ++index) {
+        assert(first.block_coded[index] == 1U);
+        assert(first.block[index].count == 1U);
+        assert(first.block[index].scan_coefficients[0] == 1);
+    }
+    context.macroblock_index = 1U;
+    assert(cavs_decode_baseline420_macroblock(
+               writer.data, writer.position, first.end_bit_offset,
+               &context, &second) == CAVS_OK);
+    assert(second.end_bit_offset == writer.position);
+    assert(second.block[5].scan_coefficients[0] == 1);
+}
+
+static void test_complete_inter_and_empty_macroblocks(void) {
+    cavs_baseline420_mb_context context = default_context(CAVS_PICTURE_P);
+    cavs_baseline420_macroblock macroblock;
+    mb_bitwriter writer;
+    unsigned index;
+    memset(&writer, 0, sizeof(writer));
+    context.fixed_qp = 1U;
+    write_ue(&writer, 1U);
+    write_se(&writer, 0);
+    write_se(&writer, 0);
+    write_ue(&writer, 19U);
+    write_single_coefficient(&writer, CAVS_BASIC_INTER_LUMA);
+    assert(cavs_decode_baseline420_macroblock(
+               writer.data, writer.position, 0U,
+               &context, &macroblock) == CAVS_OK);
+    assert(macroblock.header.coded_block_pattern == 1U);
+    assert(macroblock.block_coded[0] == 1U);
+    assert(macroblock.block[0].scan_coefficients[0] == 1);
+    for (index = 1U; index < CAVS_BASELINE420_MB_BLOCKS; ++index)
+        assert(macroblock.block_coded[index] == 0U);
+    assert(macroblock.end_bit_offset == writer.position);
+
+    memset(&writer, 0, sizeof(writer));
+    write_ue(&writer, 0U);
+    assert(cavs_decode_baseline420_macroblock(
+               writer.data, writer.position, 0U,
+               &context, &macroblock) == CAVS_OK);
+    assert(macroblock.header.is_skipped == 1U);
+    assert(macroblock.end_bit_offset == writer.position);
+    for (index = 0U; index < CAVS_BASELINE420_MB_BLOCKS; ++index)
+        assert(macroblock.block_coded[index] == 0U);
+}
+
+static void test_complete_macroblock_truncation_atomic(void) {
+    cavs_baseline420_mb_context context = default_context(CAVS_PICTURE_I);
+    cavs_baseline420_macroblock macroblock;
+    cavs_baseline420_macroblock unchanged;
+    mb_bitwriter writer;
+    memset(&writer, 0, sizeof(writer));
+    context.fixed_qp = 1U;
+    write_full_i_macroblock(&writer);
+    memset(&macroblock, 0xa5, sizeof(macroblock));
+    unchanged = macroblock;
+    assert(cavs_decode_baseline420_macroblock(
+               writer.data, writer.position - 1U, 0U,
+               &context, &macroblock) == CAVS_ERR_CORRUPT_BITSTREAM);
+    assert(memcmp(&macroblock, &unchanged, sizeof(macroblock)) == 0);
+    assert(cavs_decode_baseline420_macroblock(
+               writer.data, writer.position, 0U,
+               &context, NULL) == CAVS_ERR_INVALID_ARGUMENT);
+}
+
 void test_macroblock(void) {
     test_implicit_i_macroblock();
     test_p_skip_and_partitions();
@@ -311,4 +428,7 @@ void test_macroblock(void) {
     test_type_tables();
     test_interlaced_i_second_field();
     test_invalid_macroblocks();
+    test_complete_i_macroblock_cursor();
+    test_complete_inter_and_empty_macroblocks();
+    test_complete_macroblock_truncation_atomic();
 }

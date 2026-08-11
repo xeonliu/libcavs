@@ -202,3 +202,35 @@ cavs_result cavs_parse_baseline420_mb_header(
     *header = parsed;
     return CAVS_OK;
 }
+
+cavs_result cavs_decode_baseline420_macroblock(
+    const uint8_t *data, size_t bit_size, size_t bit_offset,
+    const cavs_baseline420_mb_context *context,
+    cavs_baseline420_macroblock *macroblock) {
+    cavs_baseline420_macroblock parsed;
+    cavs_basic_block_kind kind;
+    cavs_result result;
+    size_t cursor;
+    unsigned index;
+    if (macroblock == NULL) return CAVS_ERR_INVALID_ARGUMENT;
+    memset(&parsed, 0, sizeof(parsed));
+    result = cavs_parse_baseline420_mb_header(
+        data, bit_size, bit_offset, context, &parsed.header);
+    if (result != CAVS_OK) return result;
+    cursor = parsed.header.end_bit_offset;
+    for (index = 0U; index < CAVS_BASELINE420_MB_BLOCKS; ++index) {
+        if ((parsed.header.coded_block_pattern & (UINT8_C(1) << index)) == 0U)
+            continue;
+        kind = index >= 4U ? CAVS_BASIC_CHROMA :
+            (parsed.header.is_intra != 0U ? CAVS_BASIC_INTRA_LUMA :
+                                           CAVS_BASIC_INTER_LUMA);
+        result = cavs_decode_basic_coefficients_8x8(
+            data, bit_size, cursor, kind, &parsed.block[index]);
+        if (result != CAVS_OK) return result;
+        parsed.block_coded[index] = 1U;
+        cursor = parsed.block[index].end_bit_offset;
+    }
+    parsed.end_bit_offset = cursor;
+    *macroblock = parsed;
+    return CAVS_OK;
+}

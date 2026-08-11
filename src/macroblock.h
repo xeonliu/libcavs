@@ -8,10 +8,12 @@
 #define CAVS_MACROBLOCK_H
 
 #include <cavs/cavs.h>
+#include "coefficients.h"
 #include <stddef.h>
 #include <stdint.h>
 
 #define CAVS_MAX_MB_PARTITIONS 4U
+#define CAVS_BASELINE420_MB_BLOCKS 6U
 
 typedef struct cavs_baseline420_mb_context {
     uint8_t profile_id;
@@ -49,6 +51,13 @@ typedef struct cavs_baseline420_mb_header {
     size_t end_bit_offset;
 } cavs_baseline420_mb_header;
 
+typedef struct cavs_baseline420_macroblock {
+    cavs_baseline420_mb_header header;
+    cavs_basic_coefficients block[CAVS_BASELINE420_MB_BLOCKS];
+    uint8_t block_coded[CAVS_BASELINE420_MB_BLOCKS];
+    size_t end_bit_offset;
+} cavs_baseline420_macroblock;
+
 /*
  * Parses the basic-entropy, 8x8-transform subset of GB/T 20090.2-2013
  * Table 27 for baseline-profile YUV420. Transform coefficient syntax starts
@@ -58,5 +67,11 @@ cavs_result cavs_parse_baseline420_mb_header(
     const uint8_t *data, size_t bit_size, size_t bit_offset,
     const cavs_baseline420_mb_context *context,
     cavs_baseline420_mb_header *header);
+
+/* Decodes the header and every CBP-selected 8x8 coefficient block. */
+cavs_result cavs_decode_baseline420_macroblock(
+    const uint8_t *data, size_t bit_size, size_t bit_offset,
+    const cavs_baseline420_mb_context *context,
+    cavs_baseline420_macroblock *macroblock);
 
 #endif
