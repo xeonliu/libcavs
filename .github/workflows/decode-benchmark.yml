@@ -1,0 +1,82 @@
+name: Decode benchmark
+
+on:
+  push:
+    branches:
+      - codex/rewrite
+
+permissions:
+  contents: read
+
+jobs:
+  decode:
+    name: ${{ matrix.name }} Release
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Linux
+            os: ubuntu-latest
+            decoder: build/cavsdec
+          - name: macOS
+            os: macos-latest
+            decoder: build/cavsdec
+          - name: Windows
+            os: windows-latest
+            decoder: build/Release/cavsdec.exe
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Configure Release build
+        run: >-
+          cmake -S . -B build
+          -DCMAKE_BUILD_TYPE=Release
+          -DLIBCAVS_BUILD_SHARED=OFF
+          -DLIBCAVS_BUILD_TESTS=OFF
+
+      - name: Build decoder
+        run: cmake --build build --config Release --target cavsdec --parallel
+
+      - name: Decode CCTV-9 sample
+        shell: pwsh
+        run: |
+          $decoder = "${{ matrix.decoder }}"
+          $sample = "sample/CCTV-9.avs"
+          $expectedFrames = 741
+
+          $timer = [System.Diagnostics.Stopwatch]::StartNew()
+          $decodeOutput = & $decoder --log error $sample 2>&1 | Out-String
+          $decodeExitCode = $LASTEXITCODE
+          $timer.Stop()
+
+          $decodeOutput.TrimEnd() | Write-Host
+          if ($decodeExitCode -ne 0) {
+            throw "Decoder exited with code $decodeExitCode"
+          }
+          if ($decodeOutput -notmatch 'frames=(\d+)') {
+            throw "Decoder output did not contain a frame count"
+          }
+
+          $frameCount = [int]$Matches[1]
+          if ($frameCount -ne $expectedFrames) {
+            throw "Decoded $frameCount frames; expected $expectedFrames"
+          }
+
+          $seconds = $timer.Elapsed.TotalSeconds
+          $milliseconds = $timer.Elapsed.TotalMilliseconds
+          $framesPerSecond = $frameCount / $seconds
+          $secondsText = $seconds.ToString('F3', [Globalization.CultureInfo]::InvariantCulture)
+          $millisecondsText = $milliseconds.ToString('F0', [Globalization.CultureInfo]::InvariantCulture)
+          $fpsText = $framesPerSecond.ToString('F2', [Globalization.CultureInfo]::InvariantCulture)
+
+          "Decode time: $secondsText s ($millisecondsText ms), $fpsText frames/s" | Write-Host
+          @"
+          ## ${{ matrix.name }} Release decode
+
+          | Sample | Frames | Time | Throughput |
+          | --- | ---: | ---: | ---: |
+          | CCTV-9.avs | $frameCount | $secondsText s | $fpsText frames/s |
+          "@ >> $env:GITHUB_STEP_SUMMARY
