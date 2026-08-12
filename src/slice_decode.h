@@ -1,0 +1,52 @@
+/*
+ * Copyright (c) 2026 libcavs contributors
+ * SPDX-License-Identifier: BSD-3-Clause
+ *
+ * Picture-reconstruction cursor for one complete slice payload.
+ */
+#ifndef CAVS_SLICE_DECODE_H
+#define CAVS_SLICE_DECODE_H
+
+#include "broadcast_reconstruction.h"
+#include <stddef.h>
+#include <stdint.h>
+
+typedef struct cavs_slice_cursor {
+    size_t bit_offset;
+    size_t bit_size;
+    uint32_t macroblock_address;
+    uint16_t row;
+    uint16_t column;
+    uint16_t start_row;
+    uint8_t field;
+    uint8_t finished;
+} cavs_slice_cursor;
+
+/*
+ * Reads one complete macroblock from the stateful arithmetic decoder in
+ * opaque. CAVS_EOF means that the entropy module has validated the trailing
+ * arithmetic padding and found no further macroblock. The callback must copy
+ * its full arithmetic state before decoding and commit it only on CAVS_OK.
+ * A successful result must set end_bit_offset strictly after the cursor's
+ * current offset and no later than the declared payload size.
+ */
+typedef cavs_result (*cavs_slice_macroblock_reader)(
+    void *opaque, uint32_t macroblock_address, cavs_macroblock *macroblock);
+
+/*
+ * GB/T 20090.16-2016 6.3, 7.4 and 9.3 initialize raster scan at the slice
+ * row. For successive-field pictures, rows [0,H/32) are the first field and
+ * rows [H/32,2*H/32) are the second field.
+ */
+cavs_result cavs_slice_cursor_init(const cavs_picture *picture, uint8_t field,
+                                   uint16_t slice_row, size_t header_bits,
+                                   size_t payload_bits,
+                                   cavs_slice_cursor *cursor);
+
+/* Decodes and reconstructs until verified payload end, crossing MB rows. */
+cavs_result cavs_slice_decode(
+    cavs_slice_cursor *cursor, cavs_slice_macroblock_reader read_macroblock,
+    void *reader_opaque,
+    const cavs_broadcast_reconstruction_context *reconstruction);
+
+#endif
