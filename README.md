@@ -15,7 +15,7 @@ complete frames. The `/tmp/libcavs-reference` result is not a conformance
 oracle for this truncated tail.
 
 ```sh
-cmake -S . -B build -DLIBCAVS_BUILD_TESTS=ON
+cmake -S . -B build -DLIBCAVS_BUILD_TESTS=ON -DCMAKE_BUILD_TYPE=Release
 cmake --build build
 ctest --test-dir build --output-on-failure
 ```
