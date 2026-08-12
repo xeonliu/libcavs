@@ -223,134 +223,203 @@ not require a separate decoder procedure.
 
 ### Clause 7 -- Syntax and semantics
 
-- **Partial -- 7.1 and Table 12, Start codes.** Every listed value is
-  classified, and sequence, picture, slice, extension, user-data, and end
-  units are recognized. Video-edit and reserved-unit semantics are incomplete.
-- **Partial -- 7.1.2.1 and Table 13, Video-sequence definition.** The normal
-  sequence/header/picture/end loop exists; video-edit and every extension
-  placement do not.
-- **Implemented -- 7.1.2.2 and Table 14, Sequence-header definition.** All
-  header fields are bounded and parsed; their full level semantics are tracked
-  separately below.
-- **Partial -- 7.1.2.3 and Tables 15-17, Extension and user data.** Payloads are
-  copied into API events with stable ownership, but extensions are not decoded
-  into typed metadata.
-- **Not implemented -- 7.1.2.4 and Table 18, Sequence-display extension.** The
-  unit is retained only as a raw extension.
-- **Not implemented -- 7.1.2.5 and Table 19, Copyright extension.** The unit is
-  retained only as a raw extension.
-- **Not implemented -- 7.1.2.6 and Table 20, Camera-parameters extension.** The
-  unit is retained only as a raw extension.
-- **Implemented -- 7.1.3.1 and Table 21, I-picture header definition.** The
-  broadcast fields, including weighted quantization and entropy selection, are
-  parsed and validated.
-- **Implemented -- 7.1.3.2 and Table 22, PB-picture header definition.** P/B,
-  reference, enhanced-field, weighted-quantization, and entropy fields are
-  parsed and validated.
-- **Not implemented -- 7.1.3.3 and Table 23, Picture-display extension.** The
-  unit is retained only as a raw extension.
-- **Partial -- 7.1.3.4 and Table 24, Picture data.** Supported I/P/B successive
-  fields are assembled; progressive and frame pictures are not.
-- **Implemented -- 7.1.3.5 and Table 25, Slice definition.** Header fields,
-  basic/AEC termination, weighted-prediction parameters, and multi-row slice
-  continuation are connected for the supported path.
-- **Partial -- 7.1.3.6 and Table 26, Macroblock definition.** Basic and
-  advanced YUV420 I/P/B macroblocks are parsed; YUV422 fields are not.
-- **Implemented -- 7.1.3.7 and Table 27, Block definition.** Basic and advanced
-  8x8 coefficient syntax is parsed on the supported YUV420 path.
-- **Partial -- 7.2.1 and Table 28, Video extensions.** Extension identifiers
-  are recognized and raw bytes are retained; typed extension semantics are not.
-- **Partial -- 7.2.2.1.1, Video-edit code.** The start code is classified, but
-  edit/random-access state transitions are not implemented.
-- **Implemented -- 7.2.2.1.2, Sequence-end code.** It flushes reordered output
-  and emits the end event.
-- **Implemented -- 7.2.2.2.1, Sequence-start code.** It dispatches the sequence
-  header parser.
-- **Implemented -- 7.2.2.2.2, Profile identifier.** Profile `0x48` is
-  recognized and required by the broadcast path.
-- **Partial -- 7.2.2.2.3, Level identifier.** Listed level identifiers are
-  recognized, but Annex B resource maxima are not enforced.
-- **Partial -- 7.2.2.2.4, Progressive sequence.** The flag is parsed and its
-  header constraints are checked; progressive broadcast decoding is absent.
-- **Implemented -- 7.2.2.2.5 and 7.2.2.2.6, Horizontal and vertical size.**
-  Dimensions are validated and used to allocate coded/display geometry.
-- **Implemented -- Figure 7.** Coded padding and display-boundary geometry are
-  represented for the supported format.
-- **Partial -- 7.2.2.2.7 and Table 29, Chroma format.** Values are validated;
-  only 4:2:0 reaches broadcast reconstruction.
-- **Implemented -- 7.2.2.2.8 and Table 30, Sample precision.** The required
-  eight-bit value is validated and represented by YUV420P8/YUV422P8 formats.
-- **Implemented -- 7.2.2.2.9 and Table 31, Aspect ratio.** Valid identifiers
-  are parsed and exposed as sequence metadata.
-- **Partial -- 7.2.2.2.10 and Table 32, Frame rate.** Valid identifiers are
-  parsed; complete output timing and BBV use are absent.
-- **Partial -- 7.2.2.2.11 and 7.2.2.2.12, Bit rate.** Both fields are combined
-  and validated; level and BBV limits are not enforced.
-- **Partial -- 7.2.2.2.13, Low delay.** The flag is parsed and constrains header
-  syntax; complete low-delay scheduling is absent.
-- **Partial -- 7.2.2.2.14, BBV buffer size.** The size is parsed and exposed;
-  buffer conformance is not checked.
-- **Partial -- 7.2.2.3.1.1-7.2.2.3.1.2, Extension data.** Start codes and raw
-  reserved bytes are retained, without typed interpretation.
-- **Implemented -- 7.2.2.3.2.1-7.2.2.3.2.2, User data.** The start code and
-  following bytes are delivered losslessly through the metadata event.
-- **Not implemented -- 7.2.2.4.1-7.2.2.4.10 and Tables 33-37,
-  Sequence-display semantics.** Video format, range, colour description,
-  display size, and stereo packing are not parsed.
-- **Not implemented -- 7.2.2.5.1-7.2.2.5.7, Copyright semantics.** The payload
-  is not interpreted.
-- **Not implemented -- 7.2.2.6.1-7.2.2.6.10, Camera semantics.** Camera
-  geometry is not interpreted.
-- **Not implemented -- Figures 8 and 9.** Camera model and coordinate-system
-  semantics have no typed representation.
-- **Implemented -- 7.2.3.1.1, I-picture start code.** It begins an I picture.
-- **Partial -- 7.2.3.1.2-7.2.3.1.3, BBV delay.** Both parts are parsed; BBV
-  timing is not evaluated.
-- **Implemented -- 7.2.3.1.4-7.2.3.1.5 and Table 38, Time code.** Optional time
-  codes are parsed and range-checked.
-- **Implemented -- 7.2.3.1.6, Picture distance.** It is used by motion
-  derivation, reference management, and display ordering.
-- **Partial -- 7.2.3.1.7, BBV check count.** It is parsed for low-delay syntax;
-  no buffer checks are run.
-- **Partial -- 7.2.3.1.8, Progressive frame.** It is parsed and constrained;
-  progressive frames are not reconstructed by the broadcast path.
-- **Partial -- 7.2.3.1.9, Picture structure.** Successive field pictures are
-  reconstructed; combined frame pictures are not.
-- **Partial -- 7.2.3.1.10-7.2.3.1.11, Field output controls.** Top-field-first
-  and repeat-first-field are parsed; all progressive repeat/output cases are
-  not implemented.
-- **Implemented -- 7.2.3.1.12-7.2.3.1.14, Picture QP and skip controls.** Fixed
-  QP, picture QP, and same-polarity field skip mode feed macroblock decoding.
-- **Implemented -- 7.2.3.1.15-7.2.3.1.18, Loop-filter controls.** Disable,
-  parameter, alpha/C, and beta fields feed the integrated field filter.
-- **Implemented -- 7.2.3.1.19-7.2.3.1.24, Weighted-quantization controls.**
-  Chroma deltas, parameter sets, models, and both delta arrays build the 8x8
-  matrix used by inverse quantization.
-- **Implemented -- 7.2.3.1.25, Advanced-entropy enable.** It selects the AEC or
-  basic-entropy macroblock path.
-- **Implemented -- 7.2.3.2.1-7.2.3.2.6 and Table 39, PB-picture semantics.**
-  P/B type, mandatory advanced-mode disable, reference flags, no-forward
-  reference, and enhanced-field prediction feed the supported field path.
-- **Not implemented -- 7.2.3.3.1-7.2.3.3.3, Figure 10, Picture-display
-  semantics.** Frame-centre offsets and pan-scan geometry are not parsed.
-- **Implemented -- 7.2.4.1-7.2.4.5, Slice position and QP.** Start row,
-  extended row, fixed QP, and slice QP are parsed and bound reconstruction.
-- **Implemented -- 7.2.4.6-7.2.4.11, Weighted-prediction syntax.** Slice flags,
-  luma/chroma scales and shifts, and macroblock selection feed P/B prediction.
-- **Implemented -- 7.2.4.12-7.2.4.14, AEC alignment, skip run, and stuffing.**
-  Both entropy paths terminate without consuming the next slice.
-- **Implemented -- 7.2.5.1-7.2.5.5, YUV420 macroblock type and intra modes.**
-  The fields are parsed in both basic and advanced entropy modes.
-- **Not implemented -- 7.2.5.6, Extra YUV422 intra-chroma mode.** No YUV422
-  macroblock reaches reconstruction.
-- **Implemented -- 7.2.5.7-7.2.5.10, Reference, MVD, weighting, and CBP.** They
-  feed motion derivation, weighted prediction, and six-block dispatch.
-- **Not implemented -- 7.2.5.11, YUV422 CBP.** Table-driven parsing exists only
-  as a lower-level mapping; the two extra blocks are not decoded end to end.
-- **Implemented -- 7.2.5.12, Macroblock QP delta.** Prediction, range checking,
-  and update state are connected in both entropy modes.
-- **Implemented -- 7.2.6.1-7.2.6.2, Transform and escape coefficients.** Basic
-  VLC and AEC coefficient forms are decoded with bounds and atomic failure.
+- **Partial -- 7.1, Syntax description.** Supported unit syntax is parsed.
+- **Partial -- 7.1.1, Start codes.** Video-edit behavior remains incomplete.
+- **Partial -- Table 12, Start-code values.** Every value is classified, but
+  not every unit type has semantics.
+- **Partial -- 7.1.2, Video-sequence syntax.**
+- **Partial -- 7.1.2.1, Video-sequence definition.** The normal sequence loop
+  exists; video-edit and every extension placement do not.
+- **Partial -- Table 13, Video-sequence definition.**
+- **Implemented -- 7.1.2.2, Sequence-header definition.**
+- **Implemented -- Table 14, Sequence-header definition.** All fields are
+  bounded and parsed; full level enforcement is tracked under Annex B.
+- **Partial -- 7.1.2.3, Extension and user-data definition.** Payloads are
+  retained, but extensions are not decoded into typed metadata.
+- **Partial -- Table 15, Extension and user-data definition.**
+- **Partial -- Table 16, Extension-data definition.** Raw bytes are retained.
+- **Implemented -- Table 17, User-data definition.** Bytes are delivered by
+  the metadata event.
+- **Not implemented -- 7.1.2.4, Sequence-display extension definition.**
+- **Not implemented -- Table 18, Sequence-display extension definition.**
+- **Not implemented -- 7.1.2.5, Copyright extension definition.**
+- **Not implemented -- Table 19, Copyright extension definition.**
+- **Not implemented -- 7.1.2.6, Camera-parameters extension definition.**
+- **Not implemented -- Table 20, Camera-parameters extension definition.**
+- **Partial -- 7.1.3, Picture definition.** Only the supported YUV420
+  successive-field path is decoded end to end.
+- **Implemented -- 7.1.3.1, I-picture-header definition.**
+- **Implemented -- Table 21, I-picture-header definition.**
+- **Implemented -- 7.1.3.2, PB-picture-header definition.**
+- **Implemented -- Table 22, PB-picture-header definition.**
+- **Not implemented -- 7.1.3.3, Picture-display extension definition.**
+- **Not implemented -- Table 23, Picture-display extension definition.**
+- **Partial -- 7.1.3.4, Picture-data definition.** Progressive and combined
+  frame pictures are not reconstructed.
+- **Partial -- Table 24, Picture-data definition.**
+- **Implemented -- 7.1.3.5, Slice definition.**
+- **Implemented -- Table 25, Slice definition.** Header fields, weighted
+  prediction, entropy termination, and multi-row continuation are connected.
+- **Partial -- 7.1.3.6, Macroblock definition.** YUV422 fields are absent.
+- **Partial -- Table 26, Macroblock definition.**
+- **Partial -- 7.1.3.7, Block definition.** YUV420 8x8 blocks are parsed.
+- **Partial -- Table 27, Block definition.** YUV422 block dispatch is absent.
+- **Partial -- 7.2, Semantic description.** Unsupported extension and picture
+  structures have no complete semantics.
+- **Not implemented -- 7.2.1, Video extensions.** Extension payloads are raw.
+- **Not implemented -- Table 28, Video-extension identifiers.** Identifiers
+  inside extension payloads are not parsed.
+- **Partial -- 7.2.2, Video-sequence semantics.**
+- **Partial -- 7.2.2.1, Video sequence.**
+- **Partial -- 7.2.2.1.1, Video-edit code.** It is classified without edit or
+  random-access state transitions.
+- **Implemented -- 7.2.2.1.2, Sequence-end code.** It flushes reordered output.
+- **Implemented -- 7.2.2.2, Sequence header.**
+- **Implemented -- 7.2.2.2.1, Sequence-start code.**
+- **Implemented -- 7.2.2.2.2, Profile identifier.** Profile `0x48` is required.
+- **Partial -- 7.2.2.2.3, Level identifier.** Identifiers are recognized;
+  resource maxima are not enforced.
+- **Partial -- 7.2.2.2.4, Progressive sequence.** Parsed, but not decoded by the
+  broadcast reconstruction path.
+- **Implemented -- 7.2.2.2.5, Horizontal size.**
+- **Implemented -- 7.2.2.2.6, Vertical size.**
+- **Implemented -- Figure 7, Picture-boundary geometry.**
+- **Partial -- 7.2.2.2.7, Chroma format.** Only 4:2:0 reaches reconstruction.
+- **Partial -- Table 29, Chroma formats.** 4:2:2 is recognized but not decoded.
+- **Implemented -- 7.2.2.2.8, Sample precision.** Eight-bit precision is
+  validated.
+- **Implemented -- Table 30, Sample precision values.**
+- **Implemented -- 7.2.2.2.9, Aspect ratio.**
+- **Implemented -- Table 31, Aspect-ratio identifiers.**
+- **Partial -- 7.2.2.2.10, Frame-rate code.** Parsed without complete output
+  timing or BBV use.
+- **Partial -- Table 32, Frame-rate identifiers.**
+- **Partial -- 7.2.2.2.11, Bit-rate low bits.** Parsed without level checks.
+- **Partial -- 7.2.2.2.12, Bit-rate high bits.** Combined with the low bits;
+  level and BBV limits are not enforced.
+- **Partial -- 7.2.2.2.13, Low delay.** Header syntax is constrained, but the
+  complete low-delay schedule is absent.
+- **Partial -- 7.2.2.2.14, BBV buffer size.** Parsed without BBV simulation.
+- **Partial -- 7.2.2.3, Extension and user data.**
+- **Partial -- 7.2.2.3.1, Extension data.**
+- **Partial -- 7.2.2.3.1.1, Extension start code.** Recognized as a raw unit.
+- **Partial -- 7.2.2.3.1.2, Reserved extension byte.** Retained, not typed.
+- **Implemented -- 7.2.2.3.2, User data.**
+- **Implemented -- 7.2.2.3.2.1, User-data start code.**
+- **Implemented -- 7.2.2.3.2.2, User-data byte.** Delivered losslessly.
+- **Not implemented -- 7.2.2.4, Sequence-display extension.**
+- **Not implemented -- 7.2.2.4.1, Extension identifier.**
+- **Not implemented -- 7.2.2.4.2, Video format.**
+- **Not implemented -- Table 33, Video-format identifiers.**
+- **Not implemented -- 7.2.2.4.3, Sample range.**
+- **Not implemented -- 7.2.2.4.4, Colour-description flag.**
+- **Not implemented -- 7.2.2.4.5, Colour primaries.**
+- **Not implemented -- Table 34, Colour primaries.**
+- **Not implemented -- 7.2.2.4.6, Transfer characteristics.**
+- **Not implemented -- Table 35, Transfer characteristics.**
+- **Not implemented -- 7.2.2.4.7, Matrix coefficients.**
+- **Not implemented -- Table 36, Colour conversion matrices.**
+- **Not implemented -- 7.2.2.4.8, Horizontal display size.**
+- **Not implemented -- 7.2.2.4.9, Vertical display size.**
+- **Not implemented -- 7.2.2.4.10, Stereo packing mode.**
+- **Not implemented -- Table 37, Stereo packing modes.**
+- **Not implemented -- 7.2.2.5, Copyright extension.**
+- **Not implemented -- 7.2.2.5.1, Extension identifier.**
+- **Not implemented -- 7.2.2.5.2, Copyright flag.**
+- **Not implemented -- 7.2.2.5.3, Copyright identifier.**
+- **Not implemented -- 7.2.2.5.4, Original-or-copy flag.**
+- **Not implemented -- 7.2.2.5.5, Copyright number 1.**
+- **Not implemented -- 7.2.2.5.6, Copyright number 2.**
+- **Not implemented -- 7.2.2.5.7, Copyright number 3.**
+- **Not implemented -- 7.2.2.6, Camera-parameters extension.**
+- **Not implemented -- 7.2.2.6.1, Extension identifier.**
+- **Not implemented -- 7.2.2.6.2, Camera identifier.**
+- **Not implemented -- 7.2.2.6.3, Image-device height.**
+- **Not implemented -- 7.2.2.6.4, Focal length.**
+- **Not implemented -- 7.2.2.6.5, F-number.**
+- **Not implemented -- 7.2.2.6.6, Vertical field of view.**
+- **Not implemented -- 7.2.2.6.7, Camera-position high words.**
+- **Not implemented -- 7.2.2.6.8, Camera-position low words.**
+- **Not implemented -- 7.2.2.6.9, Camera-direction vector.**
+- **Not implemented -- 7.2.2.6.10, Image-plane vertical vector.**
+- **Not implemented -- Figure 8, Camera model.**
+- **Not implemented -- Figure 9, Camera coordinate system.**
+- **Partial -- 7.2.3, Picture semantics.**
+- **Implemented -- 7.2.3.1, I-picture header.**
+- **Implemented -- 7.2.3.1.1, I-picture start code.**
+- **Partial -- 7.2.3.1.2, BBV delay.** Parsed without timing evaluation.
+- **Partial -- 7.2.3.1.3, BBV-delay extension.** Parsed without timing use.
+- **Implemented -- 7.2.3.1.4, Time-code flag.**
+- **Implemented -- 7.2.3.1.5, Time code.** Range-checked when present.
+- **Implemented -- Table 38, Time-code fields.**
+- **Implemented -- 7.2.3.1.6, Picture distance.** Used by motion, DPB, and
+  display ordering.
+- **Partial -- 7.2.3.1.7, BBV check count.** Parsed without buffer checks.
+- **Partial -- 7.2.3.1.8, Progressive frame.** Parsed but not reconstructed.
+- **Partial -- 7.2.3.1.9, Picture structure.** Successive fields work; combined
+  frame pictures do not.
+- **Partial -- 7.2.3.1.10, Top field first.** Supported for successive fields;
+  progressive output cases remain.
+- **Partial -- 7.2.3.1.11, Repeat first field.** Parsed without all repeat and
+  output cases.
+- **Implemented -- 7.2.3.1.12, Fixed picture QP.**
+- **Implemented -- 7.2.3.1.13, Picture QP.**
+- **Implemented -- 7.2.3.1.14, Macroblock-skip mode.**
+- **Implemented -- 7.2.3.1.15, Loop-filter disable.**
+- **Implemented -- 7.2.3.1.16, Loop-filter parameter flag.**
+- **Implemented -- 7.2.3.1.17, Alpha/C index offset.**
+- **Implemented -- 7.2.3.1.18, Beta index offset.**
+- **Implemented -- 7.2.3.1.19, Weighted-quantization flag.**
+- **Implemented -- 7.2.3.1.20, Chroma-QP disable.**
+- **Implemented -- 7.2.3.1.21, Cb/Cr chroma-QP deltas.**
+- **Implemented -- 7.2.3.1.22, Weighted-quantization parameter index.**
+- **Implemented -- 7.2.3.1.23, Weighted-quantization matrix model.**
+- **Implemented -- 7.2.3.1.24, Weighted-quantization parameter deltas.**
+- **Implemented -- 7.2.3.1.25, Advanced-entropy enable.**
+- **Implemented -- 7.2.3.2, PB-picture header.**
+- **Implemented -- 7.2.3.2.1, PB-picture start code.**
+- **Implemented -- 7.2.3.2.2, Picture coding type.**
+- **Implemented -- Table 39, Picture coding types.**
+- **Implemented -- 7.2.3.2.3, Advanced-prediction-mode disable.**
+- **Implemented -- 7.2.3.2.4, Picture-reference flag.**
+- **Implemented -- 7.2.3.2.5, No-forward-reference flag.**
+- **Implemented -- 7.2.3.2.6, PB field-enhanced prediction flag.**
+- **Not implemented -- 7.2.3.3, Picture-display extension.**
+- **Not implemented -- 7.2.3.3.1, Extension identifier.**
+- **Not implemented -- 7.2.3.3.2, Horizontal frame-centre offset.**
+- **Not implemented -- 7.2.3.3.3, Vertical frame-centre offset.**
+- **Not implemented -- Figure 10, Frame-centre offset geometry.**
+- **Implemented -- 7.2.4, Slice semantics.**
+- **Implemented -- 7.2.4.1, Slice start code.**
+- **Implemented -- 7.2.4.2, Slice vertical position.**
+- **Implemented -- 7.2.4.3, Slice vertical-position extension.**
+- **Implemented -- 7.2.4.4, Fixed slice QP.**
+- **Implemented -- 7.2.4.5, Slice QP.**
+- **Implemented -- 7.2.4.6, Slice weighted-prediction flag.**
+- **Implemented -- 7.2.4.7, Luma scale.**
+- **Implemented -- 7.2.4.8, Luma shift.**
+- **Implemented -- 7.2.4.9, Chroma scale.**
+- **Implemented -- 7.2.4.10, Chroma shift.**
+- **Implemented -- 7.2.4.11, Macroblock weighted-prediction flag.**
+- **Implemented -- 7.2.4.12, AEC byte-alignment stuffing bit.**
+- **Implemented -- 7.2.4.13, Skipped-macroblock run.**
+- **Implemented -- 7.2.4.14, AEC macroblock stuffing bit.**
+- **Partial -- 7.2.5, Macroblock semantics.** YUV422 is not integrated.
+- **Implemented -- 7.2.5.1, Macroblock type.**
+- **Implemented -- 7.2.5.2, Macroblock partition type.**
+- **Implemented -- 7.2.5.3, Prediction-mode flag.**
+- **Implemented -- 7.2.5.4, Intra-luma prediction mode.**
+- **Implemented -- 7.2.5.5, Intra-chroma prediction mode.**
+- **Not implemented -- 7.2.5.6, Extra YUV422 intra-chroma mode.**
+- **Implemented -- 7.2.5.7, Macroblock reference index.**
+- **Implemented -- 7.2.5.8, Motion-vector differences.**
+- **Implemented -- 7.2.5.9, Weighted-prediction flag.**
+- **Implemented -- 7.2.5.10, Coded block pattern.**
+- **Not implemented -- 7.2.5.11, YUV422 coded block pattern.**
+- **Implemented -- 7.2.5.12, Macroblock QP delta.**
+- **Partial -- 7.2.6, Block semantics.** YUV420 8x8 blocks are integrated.
+- **Implemented -- 7.2.6.1, Transform coefficient.**
+- **Implemented -- 7.2.6.2, Escape-level difference.**
 
 ### Clause 8 -- Parsing process
 
