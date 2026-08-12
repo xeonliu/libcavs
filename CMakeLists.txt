@@ -68,6 +68,7 @@ target_include_directories(cavs_static PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
   $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>)
 target_include_directories(cavs_static PRIVATE src)
+target_compile_definitions(cavs_static PUBLIC CAVS_STATIC)
 target_compile_features(cavs_static PUBLIC c_std_99)
 libcavs_enable_warnings(cavs_static)
 
@@ -130,6 +131,9 @@ endif()
 if(LIBCAVS_BUILD_TOOL)
   add_executable(cavsdec tools/cavsdec.c)
   target_link_libraries(cavsdec PRIVATE cavs_static)
+  if(MSVC)
+    target_compile_definitions(cavsdec PRIVATE _CRT_SECURE_NO_WARNINGS)
+  endif()
   target_compile_features(cavsdec PRIVATE c_std_99)
   libcavs_enable_warnings(cavsdec)
   if(LIBCAVS_BUILD_TESTS)

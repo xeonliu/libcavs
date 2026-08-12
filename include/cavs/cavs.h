@@ -10,7 +10,9 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#if defined(_WIN32) && defined(CAVS_BUILDING_DLL)
+#if defined(_WIN32) && defined(CAVS_STATIC)
+#define CAVS_API
+#elif defined(_WIN32) && defined(CAVS_BUILDING_DLL)
 #define CAVS_API __declspec(dllexport)
 #elif defined(_WIN32)
 #define CAVS_API __declspec(dllimport)
