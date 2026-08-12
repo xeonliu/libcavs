@@ -48,7 +48,9 @@ jobs:
           $expectedFrames = 741
 
           $timer = [System.Diagnostics.Stopwatch]::StartNew()
-          $decodeOutput = & $decoder --log error $sample 2>&1 | Out-String
+          # The bundled stream ends with an intentionally truncated picture.
+          # Stop after all complete frames so the expected tail is not an error.
+          $decodeOutput = & $decoder --frames $expectedFrames --log error $sample 2>&1 | Out-String
           $decodeExitCode = $LASTEXITCODE
           $timer.Stop()
 
