@@ -80,6 +80,8 @@ typedef struct cavs_macroblock {
     uint8_t raw_type;
     uint8_t is_intra;
     uint8_t is_skipped;
+    /* GB/T 20090.16-2016 7.4.11/9.3 WeightingPrediction state. */
+    uint8_t weighting_prediction;
     uint8_t transform_8x8;
     uint8_t partition_count;
     cavs_mb_partition partition[CAVS_MAX_MB_PARTITIONS];

@@ -742,7 +742,8 @@ cavs_result cavs_decode_broadcast_macroblock(
         context->skip_mode_flag > 1U || context->picture_reference_flag > 1U ||
         context->fixed_qp > 1U || context->previous_qp > 63U ||
         context->previous_qp_delta < -32 || context->previous_qp_delta > 31 ||
-        context->mb_weighting_flag > 1U || context->macroblock_width == 0U ||
+        context->slice_weighting_flag > 1U || context->mb_weighting_flag > 1U ||
+        context->macroblock_width == 0U ||
         context->macroblock_height == 0U ||
         context->macroblock_index >=
             context->macroblock_width * context->macroblock_height)
@@ -851,8 +852,7 @@ cavs_result cavs_decode_broadcast_macroblock(
                                  15U, direction);
                 if (context->picture_reference_flag == 0U &&
                     (context->picture_type == CAVS_PICTURE_P ||
-                     (context->picture_type == CAVS_PICTURE_B &&
-                      context->picture_structure == 0U))) {
+                     context->picture_type == CAVS_PICTURE_B)) {
                     if (context->picture_type == CAVS_PICTURE_B)
                         result = decode_reference_b(&working, left, top,
                                                     &reference);
@@ -894,10 +894,13 @@ cavs_result cavs_decode_broadcast_macroblock(
         }
     }
 
-    if (context->mb_weighting_flag != 0U && parsed.is_intra == 0U) {
-        uint8_t ignored;
-        result = decode_context_bin(&working, AE_CTX_WEIGHTING, &ignored);
+    if (context->slice_weighting_flag != 0U &&
+        context->mb_weighting_flag != 0U && parsed.is_intra == 0U) {
+        uint8_t weighting_prediction;
+        result = decode_context_bin(&working, AE_CTX_WEIGHTING,
+                                    &weighting_prediction);
         if (result != CAVS_OK) return result;
+        parsed.weighting_prediction = weighting_prediction;
     }
     {
         uint8_t cbp;

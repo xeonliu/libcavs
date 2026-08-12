@@ -33,6 +33,9 @@ set(LIBCAVS_CODEC_SOURCES
   src/codec/unit.c
   src/codec/baseline_macroblock.c
   src/codec/broadcast_macroblock.c
+  src/codec/broadcast_basic_macroblock.c
+  src/codec/broadcast_quant.c
+  src/codec/broadcast_weighting.c
   src/codec/broadcast_decode.c
   src/codec/broadcast_motion.c
   src/codec/broadcast_reconstruction.c
@@ -105,6 +108,9 @@ if(LIBCAVS_BUILD_TESTS)
     tests/unit/test_frame.c
     tests/unit/test_dpb.c
     tests/unit/test_slice_decode.c
+    tests/unit/test_broadcast_quant.c
+    tests/unit/test_broadcast_weighting.c
+    tests/unit/test_broadcast_basic_macroblock.c
     tests/unit/test_loop_filter.c)
   target_include_directories(cavs_unit PRIVATE src include tests)
   target_link_libraries(cavs_unit PRIVATE cavs_test_internal)

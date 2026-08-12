@@ -87,6 +87,8 @@ typedef struct cavs_pb_picture_header {
 } cavs_pb_picture_header;
 
 #define CAVS_MAX_SLICE_REFERENCES 4U
+/* GB/T 20090.16-2016 9.3 allocates forward/backward slots for B pictures. */
+#define CAVS_MAX_WEIGHT_PARAMETERS (CAVS_MAX_SLICE_REFERENCES * 2U)
 
 /** Picture state required to interpret a target-profile slice header. */
 typedef struct cavs_slice_context {
@@ -108,10 +110,10 @@ typedef struct cavs_slice_header {
     uint8_t slice_qp;
     uint8_t slice_weighting_flag;
     uint8_t number_of_references;
-    uint8_t luma_scale[CAVS_MAX_SLICE_REFERENCES];
-    int8_t luma_shift[CAVS_MAX_SLICE_REFERENCES];
-    uint8_t chroma_scale[CAVS_MAX_SLICE_REFERENCES];
-    int8_t chroma_shift[CAVS_MAX_SLICE_REFERENCES];
+    uint8_t luma_scale[CAVS_MAX_WEIGHT_PARAMETERS];
+    int8_t luma_shift[CAVS_MAX_WEIGHT_PARAMETERS];
+    uint8_t chroma_scale[CAVS_MAX_WEIGHT_PARAMETERS];
+    int8_t chroma_shift[CAVS_MAX_WEIGHT_PARAMETERS];
     uint8_t mb_weighting_flag;
     size_t header_bits;
 } cavs_slice_header;

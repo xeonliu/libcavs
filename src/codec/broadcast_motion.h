@@ -9,6 +9,8 @@
 
 #include "codec/macroblock.h"
 #include "codec/motion.h"
+#include "codec/syntax.h"
+#include "codec/broadcast_weighting.h"
 #include <stdint.h>
 
 #define CAVS_BROADCAST_REFERENCE_COUNT 4U
@@ -71,6 +73,16 @@ typedef struct cavs_broadcast_motion_context {
     uint8_t current_field;
     uint8_t second_field;
     uint8_t pb_field_enhanced;
+    /* GB/T 20090.16-2016 7.3.2.5: prohibit forward reference candidates. */
+    uint8_t no_forward_reference;
+    /* GB/T 20090.16-2016 7.4.6, 7.4.8-7.4.11 and 9.3. */
+    uint8_t slice_weighting_flag;
+    uint8_t mb_weighting_flag;
+    uint8_t weight_parameter_count;
+    uint8_t luma_scale[CAVS_BROADCAST_WEIGHT_COUNT];
+    int8_t luma_shift[CAVS_BROADCAST_WEIGHT_COUNT];
+    uint8_t chroma_scale[CAVS_BROADCAST_WEIGHT_COUNT];
+    int8_t chroma_shift[CAVS_BROADCAST_WEIGHT_COUNT];
     cavs_luma_motion_precision precision;
     uint16_t current_distance_index;
     uint8_t default_reference_index[CAVS_MB_DIRECTIONS];

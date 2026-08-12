@@ -21,6 +21,9 @@ void test_motion(void);
 void test_frame(void);
 void test_dpb(void);
 void test_slice_decode(void);
+void test_broadcast_quant(void);
+void test_broadcast_weighting(void);
+void test_broadcast_basic_macroblock(void);
 void test_loop_filter(void);
 
 /* Exercises fixed-width reads and exact final-byte bit limits. */
@@ -99,6 +102,9 @@ int main(void) {
     test_frame();
     test_dpb();
     test_slice_decode();
+    test_broadcast_quant();
+    test_broadcast_weighting();
+    test_broadcast_basic_macroblock();
     test_loop_filter();
     return 0;
 }

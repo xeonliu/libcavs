@@ -9,6 +9,7 @@
 
 #include "picture.h"
 #include "codec/macroblock.h"
+#include "codec/broadcast_quant.h"
 #include <stddef.h>
 #include <stdint.h>
 
@@ -33,7 +34,9 @@ typedef struct cavs_broadcast_reconstruction_context {
     const cavs_macroblock_prediction_420 *inter_prediction;
     uint16_t slice_id;
     uint8_t field;
+    /* GB/T 20090.16-2016 9.2/9.9: 1 selects the current wqM8x8 matrix. */
     uint8_t weighting_quant_flag;
+    const uint8_t *weight_matrix;
     int8_t chroma_qp_delta_cb;
     int8_t chroma_qp_delta_cr;
 } cavs_broadcast_reconstruction_context;
@@ -53,6 +56,9 @@ cavs_result cavs_picture_field_plane(cavs_picture *picture, unsigned plane,
  */
 cavs_result cavs_broadcast_inverse_quantize_8x8(
     const int16_t quant[64], uint8_t qp, int32_t coefficients[64]);
+cavs_result cavs_broadcast_inverse_quantize_8x8_weighted(
+    const int16_t quant[64], uint8_t qp, const uint8_t matrix[64],
+    int32_t coefficients[64]);
 cavs_result cavs_broadcast_inverse_transform_8x8(
     const int32_t coefficients[64], int16_t residual[64]);
 

@@ -97,6 +97,25 @@ cavs_result cavs_broadcast_inverse_quantize_8x8(
                                      coefficients);
 }
 
+/*
+ * GB/T 20090.16-2016 9.2: applies ((Quant*WQ)>>3) before the Table 62
+ * dequantization stages. Conversion from the syntax-sized int16_t array to
+ * the shared int32_t API is representation handling only.
+ */
+cavs_result cavs_broadcast_inverse_quantize_8x8_weighted(
+    const int16_t quant[64], uint8_t qp, const uint8_t matrix[64],
+    int32_t coefficients[64]) {
+    int32_t parsed_quant[64];
+    int32_t predicted[64] = { 0 };
+    unsigned index;
+    if (quant == NULL || matrix == NULL || coefficients == NULL)
+        return CAVS_ERR_INVALID_ARGUMENT;
+    for (index = 0U; index < 64U; ++index)
+        parsed_quant[index] = quant[index];
+    return cavs_inverse_quantize_8x8(parsed_quant, predicted, matrix, qp,
+                                     coefficients);
+}
+
 cavs_result cavs_broadcast_inverse_transform_8x8(
     const int32_t coefficients[64], int16_t residual[64]) {
     return cavs_dsp_inverse_transform_8x8_c(coefficients, residual);
@@ -253,7 +272,8 @@ static void acquire_working_references(
 /* Applies either one 8x8 transform or four 4x4 transforms to a block. */
 static cavs_result reconstruct_residual_block(
     const cavs_macroblock *macroblock, unsigned block_index,
-    uint8_t qp, const uint8_t prediction[64], uint8_t output[64]) {
+    uint8_t qp, const uint8_t *weight_matrix,
+    const uint8_t prediction[64], uint8_t output[64]) {
     int16_t residual[64];
     cavs_result result;
     unsigned index;
@@ -262,8 +282,14 @@ static cavs_result reconstruct_residual_block(
         if (block_index >= CAVS_MB_8X8_BLOCKS ||
             macroblock->coefficient_count_8x8[block_index] > 64U)
             return CAVS_ERR_CORRUPT_BITSTREAM;
-        result = cavs_broadcast_inverse_quantize_8x8(
-            macroblock->coefficients_8x8[block_index], qp, coefficients);
+        if (weight_matrix != NULL) {
+            result = cavs_broadcast_inverse_quantize_8x8_weighted(
+                macroblock->coefficients_8x8[block_index], qp, weight_matrix,
+                coefficients);
+        } else {
+            result = cavs_broadcast_inverse_quantize_8x8(
+                macroblock->coefficients_8x8[block_index], qp, coefficients);
+        }
         if (result != CAVS_OK) return result;
         result = cavs_broadcast_inverse_transform_8x8(coefficients, residual);
         if (result != CAVS_OK) return result;
@@ -342,8 +368,9 @@ cavs_result cavs_broadcast_reconstruct_macroblock(
         !picture_valid(context->picture) ||
         context->weighting_quant_flag > 1U || macroblock->transform_8x8 > 1U)
         return CAVS_ERR_INVALID_ARGUMENT;
-    if (context->weighting_quant_flag != 0U)
-        return CAVS_ERR_UNSUPPORTED_PROFILE;
+    if (context->weighting_quant_flag != 0U &&
+        context->weight_matrix == NULL)
+        return CAVS_ERR_INVALID_ARGUMENT;
     picture = context->picture;
     if (macroblock->row >= picture->macroblock_height ||
         macroblock->column >= picture->macroblock_width)
@@ -394,7 +421,8 @@ cavs_result cavs_broadcast_reconstruct_macroblock(
                 prediction);
             if (result != CAVS_OK) return result;
             result = reconstruct_residual_block(
-                macroblock, block, macroblock->qp, prediction, reconstructed);
+                macroblock, block, macroblock->qp, context->weight_matrix,
+                prediction, reconstructed);
             if (result != CAVS_OK) return result;
             stage_block(staged_luma, staged_luma_valid, 16U,
                         (block & 1U) * 8U, (block >> 1U) * 8U, reconstructed);
@@ -419,7 +447,7 @@ cavs_result cavs_broadcast_reconstruct_macroblock(
             result = cavs_map_chroma_qp(macroblock->qp, delta, &qp);
             if (result != CAVS_OK) return result;
             result = reconstruct_residual_block(
-                macroblock, block + 4U, qp, prediction,
+                macroblock, block + 4U, qp, context->weight_matrix, prediction,
                 staged_chroma[block]);
             if (result != CAVS_OK) return result;
         }
@@ -439,7 +467,8 @@ cavs_result cavs_broadcast_reconstruct_macroblock(
                        context->inter_prediction->luma +
                            (y + row) * 16U + x, 8U);
             result = reconstruct_residual_block(
-                macroblock, block, macroblock->qp, prediction, reconstructed);
+                macroblock, block, macroblock->qp, context->weight_matrix,
+                prediction, reconstructed);
             if (result != CAVS_OK) return result;
             stage_block(staged_luma, staged_luma_valid, 16U, x, y,
                         reconstructed);
@@ -451,7 +480,7 @@ cavs_result cavs_broadcast_reconstruct_macroblock(
             result = cavs_map_chroma_qp(macroblock->qp, delta, &qp);
             if (result != CAVS_OK) return result;
             result = reconstruct_residual_block(
-                macroblock, block + 4U, qp,
+                macroblock, block + 4U, qp, context->weight_matrix,
                 context->inter_prediction->chroma[block],
                 staged_chroma[block]);
             if (result != CAVS_OK) return result;

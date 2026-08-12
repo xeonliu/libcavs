@@ -21,6 +21,8 @@ typedef struct cavs_broadcast_mb_context {
     uint8_t fixed_qp;
     uint8_t previous_qp;
     int8_t previous_qp_delta;
+    /* GB/T 20090.16-2016 Table 25 slice_weighting_flag. */
+    uint8_t slice_weighting_flag;
     uint8_t mb_weighting_flag;
     uint32_t macroblock_index;
     uint32_t macroblock_width;

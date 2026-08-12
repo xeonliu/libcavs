@@ -542,6 +542,7 @@ static cavs_result validate_context(
         context->picture_type > CAVS_PICTURE_B ||
         context->picture_structure > 1U || context->second_field > 1U ||
         context->pb_field_enhanced > 1U ||
+        context->no_forward_reference > 1U ||
         context->current_distance_index >= 512U ||
         (context->precision != CAVS_LUMA_MOTION_QUARTER &&
          context->precision != CAVS_LUMA_MOTION_EIGHTH) ||
@@ -1229,6 +1230,51 @@ static cavs_result predict_chroma_partition(
         8U);
 }
 
+/* GB/T 20090.16-2016 9.3 weights one direction before B prediction average. */
+static cavs_result weight_prediction_partition(
+    const cavs_broadcast_motion_context *context,
+    const cavs_macroblock *macroblock, const cavs_mb_partition *partition,
+    unsigned direction, uint8_t *luma, uint8_t chroma[2][64]) {
+    uint8_t enabled;
+    uint8_t parameter_index;
+    cavs_result result;
+    const cavs_motion_vector *motion;
+    if (context == NULL || macroblock == NULL || partition == NULL ||
+        luma == NULL || chroma == NULL || direction >= CAVS_MB_DIRECTIONS)
+        return CAVS_ERR_INVALID_ARGUMENT;
+    result = cavs_broadcast_should_weight(
+        context->slice_weighting_flag, context->mb_weighting_flag,
+        macroblock->weighting_prediction, macroblock->is_intra, &enabled);
+    if (result != CAVS_OK || enabled == 0U) return result;
+    motion = &partition->motion[direction];
+    if (motion->valid == 0U || motion->reference_index < 0)
+        return CAVS_ERR_MISSING_REFERENCE;
+    result = cavs_broadcast_weight_parameter_index(
+        context->picture_type,
+        direction == CAVS_PRED_BACKWARD ? CAVS_PRED_BACKWARD :
+                                           CAVS_PRED_FORWARD,
+        (uint8_t)motion->reference_index, &parameter_index);
+    if (result != CAVS_OK) return result;
+    if (parameter_index >= context->weight_parameter_count)
+        return CAVS_ERR_CORRUPT_BITSTREAM;
+    result = cavs_broadcast_weight_block(
+        luma, 16U, partition->x, partition->y, partition->width,
+        partition->height, context->luma_scale[parameter_index],
+        context->luma_shift[parameter_index]);
+    if (result != CAVS_OK) return result;
+    result = cavs_broadcast_weight_block(
+        chroma[0], 8U, partition->x / 2U, partition->y / 2U,
+        partition->width / 2U, partition->height / 2U,
+        context->chroma_scale[parameter_index],
+        context->chroma_shift[parameter_index]);
+    if (result != CAVS_OK) return result;
+    return cavs_broadcast_weight_block(
+        chroma[1], 8U, partition->x / 2U, partition->y / 2U,
+        partition->width / 2U, partition->height / 2U,
+        context->chroma_scale[parameter_index],
+        context->chroma_shift[parameter_index]);
+}
+
 /* Averages one rectangular region; this introduces no codec decision. */
 static void average_partition(uint8_t *destination, const uint8_t *forward,
                               const uint8_t *backward, size_t stride,
@@ -1342,44 +1388,61 @@ cavs_result cavs_predict_broadcast_macroblock_420(
                 backward_luma);
             if (result != CAVS_OK) return result;
         }
-        if (forward && backward)
-            average_partition(assembled.luma, forward_luma, backward_luma,
-                              16U, partition->x, partition->y,
-                              partition->width, partition->height);
-        else
-            copy_partition(assembled.luma,
-                           forward ? forward_luma : backward_luma, 16U,
-                           partition->x, partition->y,
-                           partition->width, partition->height);
-        for (direction = 0U; direction < 2U; ++direction) {
-            uint8_t forward_chroma[64];
-            uint8_t backward_chroma[64];
+        {
+            uint8_t forward_chroma[2][64];
+            uint8_t backward_chroma[2][64];
             memset(forward_chroma, 0, sizeof(forward_chroma));
             memset(backward_chroma, 0, sizeof(backward_chroma));
+            for (direction = 0U; direction < 2U; ++direction) {
+                if (forward) {
+                    result = predict_chroma_partition(
+                        context, macroblock, partition, CAVS_PRED_FORWARD,
+                        direction, forward_chroma[direction]);
+                    if (result != CAVS_OK) return result;
+                }
+                if (backward) {
+                    result = predict_chroma_partition(
+                        context, macroblock, partition, CAVS_PRED_BACKWARD,
+                        direction, backward_chroma[direction]);
+                    if (result != CAVS_OK) return result;
+                }
+            }
             if (forward) {
-                result = predict_chroma_partition(
+                result = weight_prediction_partition(
                     context, macroblock, partition, CAVS_PRED_FORWARD,
-                    direction, forward_chroma);
+                    forward_luma, forward_chroma);
                 if (result != CAVS_OK) return result;
             }
             if (backward) {
-                result = predict_chroma_partition(
+                result = weight_prediction_partition(
                     context, macroblock, partition, CAVS_PRED_BACKWARD,
-                    direction, backward_chroma);
+                    backward_luma, backward_chroma);
                 if (result != CAVS_OK) return result;
             }
             if (forward && backward)
-                average_partition(
-                    assembled.chroma[direction], forward_chroma,
-                    backward_chroma, 8U, partition->x / 2U,
-                    partition->y / 2U, partition->width / 2U,
-                    partition->height / 2U);
+                average_partition(assembled.luma, forward_luma, backward_luma,
+                                  16U, partition->x, partition->y,
+                                  partition->width, partition->height);
             else
-                copy_partition(
-                    assembled.chroma[direction],
-                    forward ? forward_chroma : backward_chroma, 8U,
-                    partition->x / 2U, partition->y / 2U,
-                    partition->width / 2U, partition->height / 2U);
+                copy_partition(assembled.luma,
+                               forward ? forward_luma : backward_luma, 16U,
+                               partition->x, partition->y,
+                               partition->width, partition->height);
+            for (direction = 0U; direction < 2U; ++direction) {
+                if (forward && backward)
+                    average_partition(
+                        assembled.chroma[direction], forward_chroma[direction],
+                        backward_chroma[direction], 8U, partition->x / 2U,
+                        partition->y / 2U, partition->width / 2U,
+                        partition->height / 2U);
+                else
+                    copy_partition(
+                        assembled.chroma[direction],
+                        forward ? forward_chroma[direction] :
+                                  backward_chroma[direction], 8U,
+                        partition->x / 2U, partition->y / 2U,
+                        partition->width / 2U, partition->height / 2U);
+            }
         }
     }
     *prediction = assembled;
