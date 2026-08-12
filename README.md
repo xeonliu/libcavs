@@ -423,27 +423,46 @@ not require a separate decoder procedure.
 
 ### Clause 8 -- Parsing process
 
-- **Implemented -- 8.1 and Table 40, Order-k Exp-Golomb.** Bounded unsigned and
-  signed readers cover the orders used by broadcast syntax.
-- **Partial -- 8.2 and Tables 41-43, `ue(v)`, `se(v)`, and `me(v)`.** Signed
-  mapping and YUV420 Table 42 CBP are implemented; Table 43 YUV422 CBP is not
-  connected to a complete macroblock path.
+- **Implemented -- 8.1, Order-k Exp-Golomb parsing.** Bounded readers cover
+  arbitrary supported orders.
+- **Implemented -- Table 40, Order-k Exp-Golomb code structure.**
+- **Partial -- 8.2, `ue(v)`, `se(v)`, and `me(v)` parsing.** YUV422 `me(v)` is
+  not connected to a complete macroblock path.
+- **Implemented -- Table 41, Signed value to `CodeNum` mapping.**
+- **Implemented -- Table 42, YUV420 `MbCBP` mapping.**
+- **Not implemented -- Table 43, YUV422 `MbCBP422` mapping.** The mapping is
+  not connected to broadcast macroblock reconstruction.
 - **Implemented -- 8.3, `ce(v)`.** Basic-entropy macroblock and coefficient VLC
   parsing is integrated for supported YUV420 field pictures.
+- **Implemented -- 8.4, `ae(v)` parsing.**
 - **Implemented -- 8.4.1, AEC overview.** Syntax values are assembled from
   bounded bin strings.
-- **Implemented -- 8.4.2.1-8.4.2.2, Initialization.** All contexts and the
-  arithmetic decoder are initialized per slice without global state.
-- **Partial -- 8.4.3 and Tables 44-50, Binarization.** Tables 44-47 and 49-50
-  are implemented; Table 48's extra YUV422 chroma mode is not integrated.
-- **Implemented -- 8.4.4.1, Bin-string parsing overview.** Regular and bypass
+- **Implemented -- 8.4.2, Initialization.**
+- **Implemented -- 8.4.2.1, Context-model initialization.**
+- **Implemented -- 8.4.2.2, Arithmetic-decoder initialization.**
+- **Partial -- 8.4.3, Binarization.** YUV422-only syntax is not integrated.
+- **Implemented -- Table 44, Skip/type and intra-chroma binarization.**
+- **Implemented -- Table 45, B-picture macroblock-type binarization.**
+- **Implemented -- Table 46, Macroblock partition-type binarization.**
+- **Implemented -- Table 47, YUV420 intra-chroma-mode binarization.**
+- **Not implemented -- Table 48, Extra YUV422 intra-chroma binarization.**
+- **Implemented -- Table 49, Motion-vector-difference binarization.**
+- **Implemented -- Table 50, QP-delta binarization.**
+- **Implemented -- 8.4.4, Binary-bin-string parsing.**
+- **Implemented -- 8.4.4.1, Overview.** Regular and bypass
   bins are selected and accumulated with bounds.
-- **Partial -- 8.4.4.2 and Table 51, Context-index selection.** All contexts
+- **Partial -- 8.4.4.2, Context-index selection.** All contexts
   needed by the YUV420 I/P/B path are implemented; YUV422-only syntax is not.
-- **Implemented -- Tables 52 and 53.** Coefficient position and context
-  selection drive advanced-entropy coefficient parsing.
-- **Implemented -- 8.4.4.3.1-8.4.4.3.5.** Regular decision, bypass, AEC
-  stuffing, and context update processes are implemented and tested.
+- **Partial -- Table 51, Syntax-element context start indices.** Entries used
+  by YUV420 are implemented; YUV422-only entries are not integrated.
+- **Implemented -- Table 52, `priIdx` to `lMax` mapping.**
+- **Implemented -- Table 53, `secIdx` coefficient context mapping.**
+- **Implemented -- 8.4.4.3, Binary-bin parsing.**
+- **Implemented -- 8.4.4.3.1, Parsing process.**
+- **Implemented -- 8.4.4.3.2, Regular decision process.**
+- **Implemented -- 8.4.4.3.3, Bypass process.**
+- **Implemented -- 8.4.4.3.4, AEC stuffing-bit process.**
+- **Implemented -- 8.4.4.3.5, Context update.**
 
 ### Clause 9 -- Decoding process
 
@@ -455,70 +474,118 @@ not require a separate decoder procedure.
   reconstruction.
 - **Implemented -- 9.3, Slice decoding.** Multiple slices per field are
   row-bounded, use slice-local neighbors, and commit completed fields.
-- **Implemented -- 9.4.1, Macroblock initialization.** Address, position,
+- **Partial -- 9.4, Macroblock decoding.** YUV422 is not integrated.
+- **Implemented -- 9.4.1, Initialization.** Address, position,
   entropy state, QP, prediction, and per-slice neighbor state are initialized.
-- **Implemented -- 9.4.2 and Tables 54-57, Macroblock types.** Current YUV420
+- **Implemented -- 9.4.2, Macroblock types.** Current YUV420
   I/P/B types, subtypes, partitions, skip, direct, and symmetric modes map to
   the internal macroblock contract.
-- **Implemented -- 9.4.3, Figures 11-12, and Table 58, Neighbor blocks.**
-  Geometry, availability, slice boundaries, and field rows are represented.
-- **Implemented -- 9.4.4.1-9.4.4.2, Tables 59-60, and Figure 13, Intra-mode
-  derivation.** All specified 8x8 luma and YUV420 chroma modes are derived.
-- **Partial -- 9.4.5 and Figures 14, 15, 16, 17, 18, 19, and 20, Reference
-  selection.** Supported field-picture topologies, default references, and
+- **Implemented -- Table 54, `mb_type` to `MbTypeIndex` mapping.**
+- **Implemented -- Table 55, P-picture macroblock types.**
+- **Implemented -- Table 56, B-picture macroblock types.**
+- **Implemented -- Table 57, B_8x8 subtypes.**
+- **Implemented -- 9.4.3, Neighbor blocks.** Geometry, availability, slice
+  boundaries, and field rows are represented.
+- **Implemented -- Figure 11, Current and neighboring block positions.**
+- **Implemented -- Figure 12, Current and neighboring macroblock positions.**
+- **Implemented -- Table 58, Neighbor-block positions.**
+- **Implemented -- 9.4.4, Intra-prediction modes.**
+- **Implemented -- 9.4.4.1, Overview.**
+- **Implemented -- 9.4.4.2, 8x8 intra-mode derivation.**
+- **Implemented -- Table 59, 8x8 luma intra modes.**
+- **Implemented -- Table 60, 8x8 chroma intra modes.**
+- **Implemented -- Figure 13, 8x8 luma intra modes.**
+- **Partial -- 9.4.5, Reference-picture selection.** Supported field-picture
+  topologies, default references, and
   enhanced/no-forward branches are implemented; frame/progressive topologies
   are not integrated.
-- **Implemented -- 9.4.6.1-9.4.6.3 and Figure 21, Motion vectors.** Distance
+- **Partial -- Figure 14, Reference-index marking method 1.**
+- **Partial -- Figure 15, Reference-index marking method 2.**
+- **Partial -- Figure 16, Reference-index marking method 3.**
+- **Partial -- Figure 17, Reference-index marking method 4.**
+- **Partial -- Figure 18, Reference-index marking method 5.**
+- **Partial -- Figure 19, Reference-index marking method 6.**
+- **Partial -- Figure 20, Reference-index marking method 7.**
+- **Implemented -- 9.4.6, Motion vectors.**
+- **Implemented -- 9.4.6.1, Overview.**
+- **Implemented -- 9.4.6.2, Luma motion-vector prediction.** Distance
   normalization, spatial prediction, partition shortcuts, scaling, and MVD
   addition are used by supported pictures.
+- **Implemented -- Figure 21, 8x16 and 16x8 motion prediction.**
+- **Implemented -- 9.4.6.3, Luma motion-vector decoding.**
 - **Partial -- 9.4.7, Macroblock coding pattern.** Six YUV420 blocks are
   dispatched; the two extra YUV422 blocks are not.
 - **Implemented -- 9.4.8, Quantization parameters.** Picture, slice, predicted
   macroblock, luma, and chroma QPs are range-checked and propagated.
 - **Implemented -- 9.4.9, Weighted-quantization matrix.** Default and signaled
   parameter models produce the 8x8 matrix used by reconstruction.
+- **Implemented -- 9.5, Block decoding.**
 - **Implemented -- 9.5.1, Basic-entropy block decoding.** Annex D VLC tables,
   EOB, escape, run, level, and reverse-run rules feed inverse scan.
 - **Implemented -- 9.5.2, Advanced-entropy block decoding.** Context-coded
   run/level data feeds the same bounded coefficient contract.
-- **Implemented -- 9.5.3 and Figures 22-23, Inverse scan.** Frame and field 8x8
+- **Implemented -- 9.5.3, Inverse scan.** Frame and field 8x8
   scan orders are selected by picture structure.
-- **Implemented -- 9.6.1 and Table 61, QP determination.** Luma and YUV420
+- **Implemented -- Figure 22, 8x8 inverse scan method 1.**
+- **Implemented -- Figure 23, 8x8 inverse scan method 2.**
+- **Implemented -- 9.6, Inverse quantization.**
+- **Implemented -- 9.6.1, QP determination.** Luma and YUV420
   chroma QPs are selected with the normative chroma mapping.
-- **Implemented -- 9.6.2 and Table 62, Inverse quantization.** Default and
+- **Implemented -- Table 61, Chroma QP mapping.**
+- **Implemented -- 9.6.2, Inverse-quantization process.** Default and
   weighted 8x8 inverse quantization are in the reconstruction path.
+- **Implemented -- Table 62, QP inverse-quantization parameters.**
 - **Implemented -- 9.7, Inverse transform.** The scalar normative 8x8 integer
   inverse transform is applied to decoded blocks.
-- **Implemented -- 9.8.1-9.8.4, Intra prediction.** Reference acquisition,
-  unavailable-sample rules, five luma modes, and four YUV420 chroma modes feed
-  reconstruction.
-- **Partial -- 9.9.1 and Figures 24, 25, 26, 27, 28, and 29, Inter motion
-  derivation.** P_Skip, B_Direct, symmetric, co-located, same-polarity skip,
+- **Implemented -- 9.8, Intra prediction.**
+- **Implemented -- 9.8.1, Overview.**
+- **Implemented -- 9.8.2, 8x8 reference-sample acquisition.**
+- **Implemented -- 9.8.3, 8x8 luma intra prediction.**
+- **Implemented -- 9.8.4, 8x8 chroma intra prediction.**
+- **Partial -- 9.9, Inter prediction.** Frame-picture and YUV422 integration
+  remain.
+- **Partial -- 9.9.1, Luma motion-vector derivation.** P_Skip, B_Direct,
+  symmetric, co-located, same-polarity skip,
   and enhanced-field math are implemented; frame-picture variants are not
   integrated end to end.
-- **Implemented -- 9.9.2.1-9.9.2.2, Figure 30, and Table 63, Luma reference
-  samples.** Edge replacement and every quarter-sample luma phase are used by
-  motion compensation.
-- **Partial -- 9.9.2.3 and Figure 31, Chroma reference samples.** Every
+- **Partial -- Figure 24, Direct-mode derivation 1.**
+- **Partial -- Figure 25, Direct-mode derivation 2.**
+- **Partial -- Figure 26, Direct-mode derivation 3.**
+- **Partial -- Figure 27, Direct-mode derivation 4.**
+- **Partial -- Figure 28, Symmetric-mode derivation 1.**
+- **Partial -- Figure 29, Symmetric-mode derivation 2.**
+- **Partial -- 9.9.2, Reference-sample derivation.** YUV422 is not integrated.
+- **Implemented -- 9.9.2.1, Overview.**
+- **Implemented -- 9.9.2.2, Luma interpolation.** Edge replacement and every
+  quarter-sample phase are used by motion compensation.
+- **Implemented -- Figure 30, Integer, half-, and quarter-sample positions.**
+- **Implemented -- Table 63, Predicted luma sample selection.**
+- **Partial -- 9.9.2.3, Chroma interpolation.** Every
   eighth-sample phase and edge replacement are implemented for YUV420; YUV422
   is not integrated.
+- **Partial -- Figure 31, Chroma interpolation.** Implemented for YUV420 only.
 - **Implemented -- 9.9.3, Weighted prediction.** Slice/macroblock flag
   selection, scale/shift, clipping, and P/B combination are connected.
 - **Implemented -- 9.10, Reconstruction.** Intra, single-reference, and
   bidirectional prediction are combined with residuals using eight-bit
   clipping.
-- **Partial -- 9.11.1 and Figures 32-33, Filter traversal.** Figure 32 YUV420
-  vertical/horizontal traversal and slice-boundary exclusion are integrated;
-  Figure 33 YUV422 traversal is present only as generic lower-level geometry
-  and is not reached by broadcast decoding.
+- **Partial -- 9.11, Loop filtering.** YUV420 field filtering is integrated;
+  YUV422 is not reached by broadcast decoding.
+- **Partial -- 9.11.1, Overview and traversal.** YUV420 vertical/horizontal
+  traversal and slice-boundary exclusion are integrated.
+- **Implemented -- Figure 32, YUV420 boundaries to filter.**
+- **Not implemented -- Figure 33, YUV422 boundaries to filter.** Generic
+  geometry exists, but the broadcast path never reaches it.
 - **Implemented -- 9.11.2, Boundary strength.** Intra, reference-index, and
   motion-vector rules derive `Bs` for P/B and predicted second fields.
-- **Implemented -- 9.11.3, Figure 34, and Table 64, Thresholds.** Sample
-  geometry and normative alpha/beta lookup tables are used by filtering.
+- **Implemented -- 9.11.3, Boundary thresholds.**
+- **Implemented -- Figure 34, Samples around an 8x8 boundary.**
+- **Implemented -- Table 64, Alpha and beta thresholds.**
 - **Implemented -- 9.11.4, `Bs == 2` filtering.** Strong luma/chroma kernels
   are applied in the field completion path.
-- **Implemented -- 9.11.5 and Table 65, `Bs == 1` filtering.** Normal kernels
-  use the normative clipping table and signed rounding rules.
+- **Implemented -- 9.11.5, `Bs == 1` filtering.** Normal kernels use the
+  normative clipping table and signed rounding rules.
+- **Implemented -- Table 65, Filter clipping parameter.**
 
 ### Annexes
 
@@ -527,30 +594,73 @@ not require a separate decoder procedure.
   numbered figure or table.
 - **Not applicable -- B.1, Overview.** It defines the meaning of profiles and
   levels.
-- **Partial -- B.2 and Table B.1, Profiles.** Profile `0x48`, eight-bit sample
+- **Partial -- B.2, Profiles.** Profile `0x48`, eight-bit sample
   precision, supported level identifiers, and current format restrictions are
   checked; the whole broadcast-profile subset is not yet decodable.
-- **Partial -- B.3.1 and Table B.2, Defined levels.** Identifiers are
+- **Partial -- Table B.1, Profiles.**
+- **Partial -- B.3, Levels.** Identifiers are recognized; limits are not.
+- **Partial -- B.3.1, Defined levels.** Identifiers are
   recognized, but recognition alone is not level conformance.
-- **Not implemented -- B.3.2 and Tables B.3, B.4, B.5, B.6, B.7, and B.8,
-  Level-independent and per-level limits.** Macroblock bits, dimensions,
+- **Partial -- Table B.2, Defined levels.**
+- **Not implemented -- B.3.2, Level-independent and per-level limits.**
+  Macroblock bits, dimensions,
   sample rate, bit rate, bin count, BBV size, motion range, and format maxima
   are not enforced.
-- **Not implemented -- C.1; C.2.1-C.2.3; C.3.1.1.1-C.3.1.1.3; C.3.1.2;
-  C.3.2.1-C.3.2.2; and C.4.1-C.4.2, Bitstream buffer verifier.** No BBV input,
-  removal, occupancy, underflow/overflow, large-picture, or check-interval
-  simulation exists.
-- **Not implemented -- Figures C.1 and C.2.** Neither BBV occupancy model is
-  represented.
-- **Implemented -- Annex D and Tables D.1, D.2, D.3, D.4, D.5, D.6, D.7,
-  D.8, D.9, D.10, D.11, D.12, D.13, D.14, D.15, D.16, D.17, D.18, D.19, and
-  D.20.** Every basic-entropy VLC entry, EOB, escape, and maximum-run mapping is
-  present and exercised by exhaustive table tests.
+- **Not implemented -- Table B.3, Maximum coded bits per macroblock.**
+- **Not implemented -- Table B.4, Level 2 limits.**
+- **Not implemented -- Table B.5, Level 4 limits.**
+- **Not implemented -- Table B.6, Level 4.2 limits.**
+- **Not implemented -- Table B.7, Level 6.0/6.1 limits.**
+- **Not implemented -- Table B.8, Level 6.3/6.5/6.2 limits.**
+- **Not implemented -- C.1, BBV overview.** No buffer verifier exists.
+- **Not implemented -- C.2, Conventions.**
+- **Not implemented -- C.2.1, Clock convention.**
+- **Not implemented -- C.2.2, Buffer-size convention.**
+- **Not implemented -- C.2.3, Maximum input-rate convention.**
+- **Not implemented -- C.3, Basic operations.**
+- **Not implemented -- C.3.1, Data input.**
+- **Not implemented -- C.3.1.1, Input method one.**
+- **Not implemented -- C.3.1.1.1, Input process.**
+- **Not implemented -- Figure C.1, BBV occupancy model one.**
+- **Not implemented -- C.3.1.1.2, Sequence-start ambiguity.**
+- **Not implemented -- C.3.1.1.3, Sequence-end ambiguity.**
+- **Not implemented -- C.3.1.2, Input method two.**
+- **Not implemented -- Figure C.2, BBV occupancy model two.**
+- **Not implemented -- C.3.2, Data removal.**
+- **Not implemented -- C.3.2.1, Non-low-delay removal.**
+- **Not implemented -- C.3.2.2, Low-delay removal.**
+- **Not implemented -- C.4, Buffer check intervals.**
+- **Not implemented -- C.4.1, Non-low-delay check intervals.**
+- **Not implemented -- C.4.2, Low-delay check intervals.**
+- **Implemented -- Annex D, Basic-entropy VLC tables.** Every entry, EOB,
+  escape, and maximum-run mapping has exhaustive table tests.
+- **Implemented -- Table D.1, `VLC0_Intra`.**
+- **Implemented -- Table D.2, `VLC1_Intra`.**
+- **Implemented -- Table D.3, `VLC2_Intra`.**
+- **Implemented -- Table D.4, `VLC3_Intra`.**
+- **Implemented -- Table D.5, `VLC4_Intra`.**
+- **Implemented -- Table D.6, `VLC5_Intra`.**
+- **Implemented -- Table D.7, `VLC6_Intra`.**
+- **Implemented -- Table D.8, `VLC0_Inter`.**
+- **Implemented -- Table D.9, `VLC1_Inter`.**
+- **Implemented -- Table D.10, `VLC2_Inter`.**
+- **Implemented -- Table D.11, `VLC3_Inter`.**
+- **Implemented -- Table D.12, `VLC4_Inter`.**
+- **Implemented -- Table D.13, `VLC5_Inter`.**
+- **Implemented -- Table D.14, `VLC6_Inter`.**
+- **Implemented -- Table D.15, `VLC0_Chroma`.**
+- **Implemented -- Table D.16, `VLC1_Chroma`.**
+- **Implemented -- Table D.17, `VLC2_Chroma`.**
+- **Implemented -- Table D.18, `VLC3_Chroma`.**
+- **Implemented -- Table D.19, `VLC4_Chroma`.**
+- **Implemented -- Table D.20, `CurrentLevel` to `MaxRun` mapping.**
 - **Not applicable -- E.1, Overview.** Annex E is an informative alternative
   description of Clause 8.4, not an additional decoder requirement.
-- **Implemented -- E.2-E.5.** The AEC initializer, regular decision, bypass,
-  and stuffing-bin behavior are implemented through the normative Clause 8.4
-  path and cross-checked against these informative procedures.
+- **Implemented -- E.2, AEC initialization reference method.** It is
+  cross-checked through the normative Clause 8.4 path.
+- **Implemented -- E.3, Regular-decision reference method.**
+- **Implemented -- E.4, Bypass reference method.**
+- **Implemented -- E.5, Stuffing-bin reference method.**
 
 See `docs/coverage.md` for implementation status and `CONTRIBUTING.md` for the
 source-control rules that apply to this independent rewrite.
