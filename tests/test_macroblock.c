@@ -5,7 +5,7 @@
  * Independent baseline YUV420 basic-entropy macroblock syntax vectors.
  */
 #include "macroblock.h"
-#include <assert.h>
+#include "test.h"
 #include <string.h>
 
 typedef struct mb_bitwriter {
@@ -97,18 +97,18 @@ static void test_implicit_i_macroblock(void) {
     write_bits(&writer, 5U, 3U);
     write_intra_prediction(&writer);
     write_se(&writer, -2);
-    assert(cavs_parse_baseline420_mb_header(writer.data, writer.position, 3U,
+    TEST_CHECK(cavs_parse_baseline420_mb_header(writer.data, writer.position, 3U,
                                             &context, &header) == CAVS_OK);
-    assert(header.type_index == 5U && header.is_intra == 1U);
-    assert(header.raw_type == 0U && header.motion_vector_count == 0U);
-    assert(header.prediction_mode_flag[0] == 1U);
-    assert(header.prediction_mode_flag[1] == 0U);
-    assert(header.intra_luma_prediction_mode[1] == 2U);
-    assert(header.intra_chroma_prediction_mode == 2U);
-    assert(header.coded_block_pattern == 63U);
-    assert(header.qp_delta == -2 && header.qp == 18U);
-    assert(header.end_bit_offset == writer.position);
-    assert(cavs_parse_baseline420_mb_header(writer.data, writer.position - 1U, 3U,
+    TEST_CHECK(header.type_index == 5U && header.is_intra == 1U);
+    TEST_CHECK(header.raw_type == 0U && header.motion_vector_count == 0U);
+    TEST_CHECK(header.prediction_mode_flag[0] == 1U);
+    TEST_CHECK(header.prediction_mode_flag[1] == 0U);
+    TEST_CHECK(header.intra_luma_prediction_mode[1] == 2U);
+    TEST_CHECK(header.intra_chroma_prediction_mode == 2U);
+    TEST_CHECK(header.coded_block_pattern == 63U);
+    TEST_CHECK(header.qp_delta == -2 && header.qp == 18U);
+    TEST_CHECK(header.end_bit_offset == writer.position);
+    TEST_CHECK(cavs_parse_baseline420_mb_header(writer.data, writer.position - 1U, 3U,
                                             &context, &header) ==
            CAVS_ERR_CORRUPT_BITSTREAM);
 }
@@ -122,9 +122,9 @@ static void test_p_skip_and_partitions(void) {
 
     memset(&writer, 0, sizeof(writer));
     write_ue(&writer, 0U);
-    assert(cavs_parse_baseline420_mb_header(writer.data, writer.position, 0U,
+    TEST_CHECK(cavs_parse_baseline420_mb_header(writer.data, writer.position, 0U,
                                             &context, &header) == CAVS_OK);
-    assert(header.is_skipped == 1U && header.end_bit_offset == 1U);
+    TEST_CHECK(header.is_skipped == 1U && header.end_bit_offset == 1U);
 
     memset(&writer, 0, sizeof(writer));
     context.picture_reference_flag = 0U;
@@ -132,13 +132,13 @@ static void test_p_skip_and_partitions(void) {
     for (index = 0U; index < 4U; ++index) write_bits(&writer, index & 1U, 1U);
     for (index = 0U; index < 8U; ++index) write_se(&writer, differences[index]);
     write_ue(&writer, 0U);
-    assert(cavs_parse_baseline420_mb_header(writer.data, writer.position, 0U,
+    TEST_CHECK(cavs_parse_baseline420_mb_header(writer.data, writer.position, 0U,
                                             &context, &header) == CAVS_OK);
-    assert(header.type_index == 4U && header.motion_vector_count == 4U);
-    assert(header.reference_index[1] == 1U && header.reference_index[3] == 1U);
-    assert(header.motion_vector_difference_x[2] == 3);
-    assert(header.motion_vector_difference_y[3] == -4);
-    assert(header.coded_block_pattern == 0U && header.qp == 20U);
+    TEST_CHECK(header.type_index == 4U && header.motion_vector_count == 4U);
+    TEST_CHECK(header.reference_index[1] == 1U && header.reference_index[3] == 1U);
+    TEST_CHECK(header.motion_vector_difference_x[2] == 3);
+    TEST_CHECK(header.motion_vector_difference_y[3] == -4);
+    TEST_CHECK(header.coded_block_pattern == 0U && header.qp == 20U);
 }
 
 static void test_b_8x8_macroblock(void) {
@@ -160,12 +160,12 @@ static void test_b_8x8_macroblock(void) {
     }
     write_bits(&writer, 1U, 1U);
     write_ue(&writer, 2U);
-    assert(cavs_parse_baseline420_mb_header(writer.data, writer.position, 0U,
+    TEST_CHECK(cavs_parse_baseline420_mb_header(writer.data, writer.position, 0U,
                                             &context, &header) == CAVS_OK);
-    assert(header.type_index == 23U && header.motion_vector_count == 3U);
-    assert(header.partition_type[0] == 0U && header.partition_type[3] == 3U);
-    assert(header.weighting_prediction == 1U);
-    assert(header.coded_block_pattern == 63U);
+    TEST_CHECK(header.type_index == 23U && header.motion_vector_count == 3U);
+    TEST_CHECK(header.partition_type[0] == 0U && header.partition_type[3] == 3U);
+    TEST_CHECK(header.weighting_prediction == 1U);
+    TEST_CHECK(header.coded_block_pattern == 63U);
 }
 
 static void test_table45_mappings(void) {
@@ -192,9 +192,9 @@ static void test_table45_mappings(void) {
         write_se(&writer, 0);
         write_se(&writer, 0);
         write_ue(&writer, code);
-        assert(cavs_parse_baseline420_mb_header(writer.data, writer.position, 0U,
+        TEST_CHECK(cavs_parse_baseline420_mb_header(writer.data, writer.position, 0U,
                                                 &context, &header) == CAVS_OK);
-        assert(header.coded_block_pattern == expected_inter[code]);
+        TEST_CHECK(header.coded_block_pattern == expected_inter[code]);
 
         memset(&writer, 0, sizeof(writer));
         write_ue(&writer, 5U + code);
@@ -203,9 +203,9 @@ static void test_table45_mappings(void) {
         write_bits(&writer, 1U, 1U);
         write_bits(&writer, 1U, 1U);
         write_ue(&writer, 0U);
-        assert(cavs_parse_baseline420_mb_header(writer.data, writer.position, 0U,
+        TEST_CHECK(cavs_parse_baseline420_mb_header(writer.data, writer.position, 0U,
                                                 &context, &header) == CAVS_OK);
-        assert(header.coded_block_pattern == expected_intra[code]);
+        TEST_CHECK(header.coded_block_pattern == expected_intra[code]);
     }
 }
 
@@ -233,10 +233,10 @@ static void test_type_tables(void) {
             }
             write_ue(&writer, 0U);
         }
-        assert(cavs_parse_baseline420_mb_header(writer.data, writer.position, 0U,
+        TEST_CHECK(cavs_parse_baseline420_mb_header(writer.data, writer.position, 0U,
                                                 &context, &header) == CAVS_OK);
-        assert(header.type_index == type);
-        assert(header.motion_vector_count == p_counts[type]);
+        TEST_CHECK(header.type_index == type);
+        TEST_CHECK(header.motion_vector_count == p_counts[type]);
     }
 
     context = default_context(CAVS_PICTURE_B);
@@ -262,10 +262,10 @@ static void test_type_tables(void) {
             }
             write_ue(&writer, 0U);
         }
-        assert(cavs_parse_baseline420_mb_header(writer.data, writer.position, 0U,
+        TEST_CHECK(cavs_parse_baseline420_mb_header(writer.data, writer.position, 0U,
                                                 &context, &header) == CAVS_OK);
-        assert(header.type_index == type);
-        assert(header.motion_vector_count == expected);
+        TEST_CHECK(header.type_index == type);
+        TEST_CHECK(header.motion_vector_count == expected);
     }
 }
 
@@ -277,17 +277,17 @@ static void test_interlaced_i_second_field(void) {
     context.macroblock_index = 2U;
     memset(&writer, 0, sizeof(writer));
     write_ue(&writer, 0U);
-    assert(cavs_parse_baseline420_mb_header(writer.data, writer.position, 0U,
+    TEST_CHECK(cavs_parse_baseline420_mb_header(writer.data, writer.position, 0U,
                                             &context, &header) == CAVS_OK);
-    assert(header.type_index == 0U && header.is_skipped == 1U);
+    TEST_CHECK(header.type_index == 0U && header.is_skipped == 1U);
 
     context.macroblock_index = 1U;
     memset(&writer, 0, sizeof(writer));
     write_intra_prediction(&writer);
     write_se(&writer, 0);
-    assert(cavs_parse_baseline420_mb_header(writer.data, writer.position, 0U,
+    TEST_CHECK(cavs_parse_baseline420_mb_header(writer.data, writer.position, 0U,
                                             &context, &header) == CAVS_OK);
-    assert(header.type_index == 5U && header.is_intra == 1U);
+    TEST_CHECK(header.type_index == 5U && header.is_intra == 1U);
 }
 
 static void test_invalid_macroblocks(void) {
@@ -299,11 +299,11 @@ static void test_invalid_macroblocks(void) {
     write_se(&writer, 4096);
     write_se(&writer, 0);
     write_ue(&writer, 0U);
-    assert(cavs_parse_baseline420_mb_header(writer.data, writer.position, 0U,
+    TEST_CHECK(cavs_parse_baseline420_mb_header(writer.data, writer.position, 0U,
                                             &context, &header) ==
            CAVS_ERR_CORRUPT_BITSTREAM);
     context.format = CAVS_YUV422P8;
-    assert(cavs_parse_baseline420_mb_header(writer.data, writer.position, 0U,
+    TEST_CHECK(cavs_parse_baseline420_mb_header(writer.data, writer.position, 0U,
                                             &context, &header) ==
            CAVS_ERR_INVALID_ARGUMENT);
 
@@ -312,7 +312,7 @@ static void test_invalid_macroblocks(void) {
     memset(&writer, 0, sizeof(writer));
     write_intra_prediction(&writer);
     write_se(&writer, -1);
-    assert(cavs_parse_baseline420_mb_header(writer.data, writer.position, 0U,
+    TEST_CHECK(cavs_parse_baseline420_mb_header(writer.data, writer.position, 0U,
                                             &context, &header) ==
            CAVS_ERR_CORRUPT_BITSTREAM);
 
@@ -323,7 +323,7 @@ static void test_invalid_macroblocks(void) {
     write_bits(&writer, 1U, 1U);
     write_bits(&writer, 1U, 1U);
     write_ue(&writer, 4U);
-    assert(cavs_parse_baseline420_mb_header(writer.data, writer.position, 0U,
+    TEST_CHECK(cavs_parse_baseline420_mb_header(writer.data, writer.position, 0U,
                                             &context, &header) ==
            CAVS_ERR_CORRUPT_BITSTREAM);
 }
@@ -349,23 +349,23 @@ static void test_complete_i_macroblock_cursor(void) {
     write_full_i_macroblock(&writer);
     boundary = writer.position;
     write_full_i_macroblock(&writer);
-    assert((boundary & 7U) != 0U);
-    assert(cavs_decode_baseline420_macroblock(
+    TEST_CHECK((boundary & 7U) != 0U);
+    TEST_CHECK(cavs_decode_baseline420_macroblock(
                writer.data, writer.position, 0U, &context, &first) == CAVS_OK);
-    assert(first.header.is_intra == 1U && first.header.qp == 20U);
-    assert(first.header.coded_block_pattern == 63U);
-    assert(first.end_bit_offset == boundary);
+    TEST_CHECK(first.header.is_intra == 1U && first.header.qp == 20U);
+    TEST_CHECK(first.header.coded_block_pattern == 63U);
+    TEST_CHECK(first.end_bit_offset == boundary);
     for (index = 0U; index < CAVS_BASELINE420_MB_BLOCKS; ++index) {
-        assert(first.block_coded[index] == 1U);
-        assert(first.block[index].count == 1U);
-        assert(first.block[index].scan_coefficients[0] == 1);
+        TEST_CHECK(first.block_coded[index] == 1U);
+        TEST_CHECK(first.block[index].count == 1U);
+        TEST_CHECK(first.block[index].scan_coefficients[0] == 1);
     }
     context.macroblock_index = 1U;
-    assert(cavs_decode_baseline420_macroblock(
+    TEST_CHECK(cavs_decode_baseline420_macroblock(
                writer.data, writer.position, first.end_bit_offset,
                &context, &second) == CAVS_OK);
-    assert(second.end_bit_offset == writer.position);
-    assert(second.block[5].scan_coefficients[0] == 1);
+    TEST_CHECK(second.end_bit_offset == writer.position);
+    TEST_CHECK(second.block[5].scan_coefficients[0] == 1);
 }
 
 static void test_complete_inter_and_empty_macroblocks(void) {
@@ -380,25 +380,25 @@ static void test_complete_inter_and_empty_macroblocks(void) {
     write_se(&writer, 0);
     write_ue(&writer, 19U);
     write_single_coefficient(&writer, CAVS_BASIC_INTER_LUMA);
-    assert(cavs_decode_baseline420_macroblock(
+    TEST_CHECK(cavs_decode_baseline420_macroblock(
                writer.data, writer.position, 0U,
                &context, &macroblock) == CAVS_OK);
-    assert(macroblock.header.coded_block_pattern == 1U);
-    assert(macroblock.block_coded[0] == 1U);
-    assert(macroblock.block[0].scan_coefficients[0] == 1);
+    TEST_CHECK(macroblock.header.coded_block_pattern == 1U);
+    TEST_CHECK(macroblock.block_coded[0] == 1U);
+    TEST_CHECK(macroblock.block[0].scan_coefficients[0] == 1);
     for (index = 1U; index < CAVS_BASELINE420_MB_BLOCKS; ++index)
-        assert(macroblock.block_coded[index] == 0U);
-    assert(macroblock.end_bit_offset == writer.position);
+        TEST_CHECK(macroblock.block_coded[index] == 0U);
+    TEST_CHECK(macroblock.end_bit_offset == writer.position);
 
     memset(&writer, 0, sizeof(writer));
     write_ue(&writer, 0U);
-    assert(cavs_decode_baseline420_macroblock(
+    TEST_CHECK(cavs_decode_baseline420_macroblock(
                writer.data, writer.position, 0U,
                &context, &macroblock) == CAVS_OK);
-    assert(macroblock.header.is_skipped == 1U);
-    assert(macroblock.end_bit_offset == writer.position);
+    TEST_CHECK(macroblock.header.is_skipped == 1U);
+    TEST_CHECK(macroblock.end_bit_offset == writer.position);
     for (index = 0U; index < CAVS_BASELINE420_MB_BLOCKS; ++index)
-        assert(macroblock.block_coded[index] == 0U);
+        TEST_CHECK(macroblock.block_coded[index] == 0U);
 }
 
 static void test_complete_macroblock_truncation_atomic(void) {
@@ -411,11 +411,11 @@ static void test_complete_macroblock_truncation_atomic(void) {
     write_full_i_macroblock(&writer);
     memset(&macroblock, 0xa5, sizeof(macroblock));
     unchanged = macroblock;
-    assert(cavs_decode_baseline420_macroblock(
+    TEST_CHECK(cavs_decode_baseline420_macroblock(
                writer.data, writer.position - 1U, 0U,
                &context, &macroblock) == CAVS_ERR_CORRUPT_BITSTREAM);
-    assert(memcmp(&macroblock, &unchanged, sizeof(macroblock)) == 0);
-    assert(cavs_decode_baseline420_macroblock(
+    TEST_CHECK(memcmp(&macroblock, &unchanged, sizeof(macroblock)) == 0);
+    TEST_CHECK(cavs_decode_baseline420_macroblock(
                writer.data, writer.position, 0U,
                &context, NULL) == CAVS_ERR_INVALID_ARGUMENT);
 }
@@ -439,41 +439,41 @@ static void test_macroblock_reconstruction(void) {
     macroblock.block[4].scan_coefficients[0] = 8;
     memset(forward, 100, sizeof(forward));
     memset(backward, 102, sizeof(backward));
-    assert(cavs_reconstruct_baseline420_macroblock(
+    TEST_CHECK(cavs_reconstruct_baseline420_macroblock(
                &macroblock, CAVS_SCAN_8X8_FRAME, &forward[0][0],
                &backward[0][0], &reconstructed[0][0]) == CAVS_OK);
     for (sample = 0U; sample < 64U; ++sample) {
-        assert(reconstructed[0][sample] == 102U);
-        assert(reconstructed[4][sample] == 102U);
-        assert(reconstructed[1][sample] == 101U);
+        TEST_CHECK(reconstructed[0][sample] == 102U);
+        TEST_CHECK(reconstructed[4][sample] == 102U);
+        TEST_CHECK(reconstructed[1][sample] == 101U);
     }
-    assert(cavs_reconstruct_baseline420_macroblock(
+    TEST_CHECK(cavs_reconstruct_baseline420_macroblock(
                &macroblock, CAVS_SCAN_8X8_FRAME, &forward[0][0], NULL,
                &reconstructed[0][0]) == CAVS_OK);
-    assert(reconstructed[0][0] == 101U && reconstructed[1][0] == 100U);
+    TEST_CHECK(reconstructed[0][0] == 101U && reconstructed[1][0] == 100U);
 
     macroblock.block[0].scan_coefficients[63] = 2048;
     memset(reconstructed, 0x5a, sizeof(reconstructed));
     memcpy(unchanged, reconstructed, sizeof(unchanged));
-    assert(cavs_reconstruct_baseline420_macroblock(
+    TEST_CHECK(cavs_reconstruct_baseline420_macroblock(
                &macroblock, CAVS_SCAN_8X8_FRAME, &forward[0][0], NULL,
                &reconstructed[0][0]) == CAVS_ERR_CORRUPT_BITSTREAM);
-    assert(memcmp(reconstructed, unchanged, sizeof(reconstructed)) == 0);
+    TEST_CHECK(memcmp(reconstructed, unchanged, sizeof(reconstructed)) == 0);
     macroblock.block[0].scan_coefficients[63] = 0;
     macroblock.block_coded[0] = 2U;
     unchanged_macroblock = macroblock;
-    assert(cavs_reconstruct_baseline420_macroblock(
+    TEST_CHECK(cavs_reconstruct_baseline420_macroblock(
                &macroblock, CAVS_SCAN_8X8_FRAME, &forward[0][0], NULL,
                &reconstructed[0][0]) == CAVS_ERR_INVALID_ARGUMENT);
-    assert(memcmp(&macroblock, &unchanged_macroblock,
+    TEST_CHECK(memcmp(&macroblock, &unchanged_macroblock,
                   sizeof(macroblock)) == 0);
     macroblock.block_coded[0] = 0U;
-    assert(cavs_reconstruct_baseline420_macroblock(
+    TEST_CHECK(cavs_reconstruct_baseline420_macroblock(
                &macroblock, (cavs_scan_mode_8x8)2, &forward[0][0], NULL,
                &reconstructed[0][0]) == CAVS_ERR_INVALID_ARGUMENT);
     macroblock.block_coded[0] = 1U;
     macroblock.block[0].count = 0U;
-    assert(cavs_reconstruct_baseline420_macroblock(
+    TEST_CHECK(cavs_reconstruct_baseline420_macroblock(
                &macroblock, CAVS_SCAN_8X8_FRAME, &forward[0][0], NULL,
                &reconstructed[0][0]) == CAVS_ERR_CORRUPT_BITSTREAM);
 }
@@ -510,45 +510,45 @@ static void test_intra_macroblock_mode_assembly(void) {
     }
     fill_macroblock_references(&chroma_references[0], 33U);
     fill_macroblock_references(&chroma_references[1], 49U);
-    assert(cavs_predict_baseline420_intra_macroblock(
+    TEST_CHECK(cavs_predict_baseline420_intra_macroblock(
                &macroblock, luma_references, chroma_references,
                predicted_modes, forward) == CAVS_OK);
-    assert(cavs_predict_intra_luma_8x8(
+    TEST_CHECK(cavs_predict_intra_luma_8x8(
                &luma_references[0], CAVS_INTRA_LUMA_VERTICAL_8X8,
                expected) == CAVS_OK);
-    assert(memcmp(forward, expected, sizeof(expected)) == 0);
-    assert(cavs_predict_intra_chroma_8x8(
+    TEST_CHECK(memcmp(forward, expected, sizeof(expected)) == 0);
+    TEST_CHECK(cavs_predict_intra_chroma_8x8(
                &chroma_references[0], CAVS_INTRA_CHROMA_PLANE_8X8,
                expected) == CAVS_OK);
-    assert(memcmp(forward + 4U * 64U, expected, sizeof(expected)) == 0);
+    TEST_CHECK(memcmp(forward + 4U * 64U, expected, sizeof(expected)) == 0);
 
     for (index = 0U; index < 4U; ++index) {
         macroblock.header.prediction_mode_flag[index] = 0U;
         macroblock.header.intra_luma_prediction_mode[index] =
             predicted_modes[index];
     }
-    assert(cavs_predict_baseline420_intra_macroblock(
+    TEST_CHECK(cavs_predict_baseline420_intra_macroblock(
                &macroblock, luma_references, chroma_references,
                predicted_modes, forward) == CAVS_OK);
-    assert(cavs_predict_intra_luma_8x8(
+    TEST_CHECK(cavs_predict_intra_luma_8x8(
                &luma_references[0], CAVS_INTRA_LUMA_HORIZONTAL_8X8,
                expected) == CAVS_OK);
-    assert(memcmp(forward, expected, sizeof(expected)) == 0);
-    assert(cavs_predict_intra_luma_8x8(
+    TEST_CHECK(memcmp(forward, expected, sizeof(expected)) == 0);
+    TEST_CHECK(cavs_predict_intra_luma_8x8(
                &luma_references[3], CAVS_INTRA_LUMA_DOWN_RIGHT_8X8,
                expected) == CAVS_OK);
-    assert(memcmp(forward + 3U * 64U, expected, sizeof(expected)) == 0);
+    TEST_CHECK(memcmp(forward + 3U * 64U, expected, sizeof(expected)) == 0);
 
     memset(forward, 0xa5, sizeof(forward));
     macroblock.header.intra_luma_prediction_mode[0] = 4U;
-    assert(cavs_predict_baseline420_intra_macroblock(
+    TEST_CHECK(cavs_predict_baseline420_intra_macroblock(
                &macroblock, luma_references, chroma_references,
                predicted_modes, forward) == CAVS_ERR_CORRUPT_BITSTREAM);
     for (index = 0U; index < sizeof(forward); ++index)
-        assert(forward[index] == 0xa5U);
+        TEST_CHECK(forward[index] == 0xa5U);
     macroblock.header.intra_luma_prediction_mode[0] = 0U;
     macroblock.header.is_intra = 0U;
-    assert(cavs_predict_baseline420_intra_macroblock(
+    TEST_CHECK(cavs_predict_baseline420_intra_macroblock(
                &macroblock, luma_references, chroma_references,
                predicted_modes, forward) == CAVS_ERR_INVALID_ARGUMENT);
 }

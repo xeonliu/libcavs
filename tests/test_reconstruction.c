@@ -5,7 +5,7 @@
  * GB/T 20090.2-2013 baseline 8x8 reconstruction-math tests.
  */
 #include "reconstruction.h"
-#include <assert.h>
+#include "test.h"
 #include <limits.h>
 #include <stdint.h>
 #include <string.h>
@@ -47,17 +47,17 @@ static void test_inverse_scan(void) {
     int32_t matrix[64];
     unsigned index;
     for (index = 0U; index < 64U; ++index) values[index] = (int32_t)index;
-    assert(cavs_inverse_scan_8x8(values, CAVS_SCAN_8X8_FRAME, matrix) == CAVS_OK);
-    assert(memcmp(matrix, expected_frame, sizeof(matrix)) == 0);
-    assert(cavs_inverse_scan_8x8(values, CAVS_SCAN_8X8_FIELD, matrix) == CAVS_OK);
-    assert(memcmp(matrix, expected_field, sizeof(matrix)) == 0);
-    assert(cavs_inverse_scan_8x8(values, CAVS_SCAN_8X8_FRAME, values) == CAVS_OK);
-    assert(memcmp(values, expected_frame, sizeof(values)) == 0);
-    assert(cavs_inverse_scan_8x8(NULL, CAVS_SCAN_8X8_FRAME, matrix) ==
+    TEST_CHECK(cavs_inverse_scan_8x8(values, CAVS_SCAN_8X8_FRAME, matrix) == CAVS_OK);
+    TEST_CHECK(memcmp(matrix, expected_frame, sizeof(matrix)) == 0);
+    TEST_CHECK(cavs_inverse_scan_8x8(values, CAVS_SCAN_8X8_FIELD, matrix) == CAVS_OK);
+    TEST_CHECK(memcmp(matrix, expected_field, sizeof(matrix)) == 0);
+    TEST_CHECK(cavs_inverse_scan_8x8(values, CAVS_SCAN_8X8_FRAME, values) == CAVS_OK);
+    TEST_CHECK(memcmp(values, expected_frame, sizeof(values)) == 0);
+    TEST_CHECK(cavs_inverse_scan_8x8(NULL, CAVS_SCAN_8X8_FRAME, matrix) ==
            CAVS_ERR_INVALID_ARGUMENT);
-    assert(cavs_inverse_scan_8x8(matrix, (cavs_scan_mode_8x8)2, values) ==
+    TEST_CHECK(cavs_inverse_scan_8x8(matrix, (cavs_scan_mode_8x8)2, values) ==
            CAVS_ERR_INVALID_ARGUMENT);
-    assert(cavs_inverse_scan_8x8(matrix, (cavs_scan_mode_8x8)-1, values) ==
+    TEST_CHECK(cavs_inverse_scan_8x8(matrix, (cavs_scan_mode_8x8)-1, values) ==
            CAVS_ERR_INVALID_ARGUMENT);
 }
 
@@ -71,14 +71,14 @@ static void test_chroma_qp(void) {
     uint8_t mapped = 0U;
     unsigned qp;
     for (qp = 0U; qp < 64U; ++qp) {
-        assert(cavs_map_chroma_qp((uint8_t)qp, 0, &mapped) == CAVS_OK);
-        assert(mapped == expected[qp]);
+        TEST_CHECK(cavs_map_chroma_qp((uint8_t)qp, 0, &mapped) == CAVS_OK);
+        TEST_CHECK(mapped == expected[qp]);
     }
-    assert(cavs_map_chroma_qp(40U, 3, &mapped) == CAVS_OK && mapped == 42U);
-    assert(cavs_map_chroma_qp(63U, 1, &mapped) == CAVS_ERR_CORRUPT_BITSTREAM);
-    assert(cavs_map_chroma_qp(0U, -1, &mapped) == CAVS_ERR_CORRUPT_BITSTREAM);
-    assert(cavs_map_chroma_qp(64U, 0, &mapped) == CAVS_ERR_INVALID_ARGUMENT);
-    assert(cavs_map_chroma_qp(0U, 0, NULL) == CAVS_ERR_INVALID_ARGUMENT);
+    TEST_CHECK(cavs_map_chroma_qp(40U, 3, &mapped) == CAVS_OK && mapped == 42U);
+    TEST_CHECK(cavs_map_chroma_qp(63U, 1, &mapped) == CAVS_ERR_CORRUPT_BITSTREAM);
+    TEST_CHECK(cavs_map_chroma_qp(0U, -1, &mapped) == CAVS_ERR_CORRUPT_BITSTREAM);
+    TEST_CHECK(cavs_map_chroma_qp(64U, 0, &mapped) == CAVS_ERR_INVALID_ARGUMENT);
+    TEST_CHECK(cavs_map_chroma_qp(0U, 0, NULL) == CAVS_ERR_INVALID_ARGUMENT);
 }
 
 static void test_inverse_quantization(void) {
@@ -111,39 +111,39 @@ static void test_inverse_quantization(void) {
         int64_t expected;
         for (index = 0U; index < 64U; ++index)
             quant[index] = index == 0U ? 1 : -1;
-        assert(cavs_inverse_quantize_8x8(quant, predicted, weights,
+        TEST_CHECK(cavs_inverse_quantize_8x8(quant, predicted, weights,
                                         (uint8_t)qp, output) == CAVS_OK);
         expected = reference_floor_shift(
             (int64_t)dequant[qp] + (INT64_C(1) << (shifts[qp] - 1U)),
             shifts[qp]);
-        assert(output[0] == expected);
+        TEST_CHECK(output[0] == expected);
         expected = reference_floor_shift(
             reference_floor_shift((int64_t)-16 * dequant[qp], 4U) +
                 (INT64_C(1) << (shifts[qp] - 1U)), shifts[qp]);
-        assert(output[1] == expected);
+        TEST_CHECK(output[1] == expected);
     }
     memset(quant, 0, sizeof(quant));
     memset(predicted, 0, sizeof(predicted));
     memset(weights, 128, sizeof(weights));
     quant[0] = 17;
     predicted[0] = 17;
-    assert(cavs_inverse_quantize_8x8(quant, predicted, weights, 63U,
+    TEST_CHECK(cavs_inverse_quantize_8x8(quant, predicted, weights, 63U,
                                     quant) == CAVS_OK);
-    assert(quant[0] == 0);
+    TEST_CHECK(quant[0] == 0);
 
     memset(quant, 0, sizeof(quant));
     quant[63] = 2048;
     memset(unchanged, 0x5a, sizeof(unchanged));
     memcpy(output, unchanged, sizeof(output));
-    assert(cavs_inverse_quantize_8x8(quant, predicted, weights, 0U,
+    TEST_CHECK(cavs_inverse_quantize_8x8(quant, predicted, weights, 0U,
                                     output) == CAVS_ERR_CORRUPT_BITSTREAM);
-    assert(memcmp(output, unchanged, sizeof(output)) == 0);
+    TEST_CHECK(memcmp(output, unchanged, sizeof(output)) == 0);
     quant[63] = 2047;
-    assert(cavs_inverse_quantize_8x8(quant, predicted, weights, 63U,
+    TEST_CHECK(cavs_inverse_quantize_8x8(quant, predicted, weights, 63U,
                                     output) == CAVS_ERR_CORRUPT_BITSTREAM);
-    assert(cavs_inverse_quantize_8x8(quant, predicted, weights, 64U,
+    TEST_CHECK(cavs_inverse_quantize_8x8(quant, predicted, weights, 64U,
                                     output) == CAVS_ERR_INVALID_ARGUMENT);
-    assert(cavs_inverse_quantize_8x8(NULL, predicted, weights, 0U,
+    TEST_CHECK(cavs_inverse_quantize_8x8(NULL, predicted, weights, 0U,
                                     output) == CAVS_ERR_INVALID_ARGUMENT);
 }
 
@@ -185,42 +185,42 @@ static void test_inverse_transform(void) {
     int16_t unchanged[64];
     unsigned index;
     memset(coefficients, 0, sizeof(coefficients));
-    assert(cavs_inverse_transform_8x8(coefficients, output) == CAVS_OK);
-    for (index = 0U; index < 64U; ++index) assert(output[index] == 0);
+    TEST_CHECK(cavs_inverse_transform_8x8(coefficients, output) == CAVS_OK);
+    for (index = 0U; index < 64U; ++index) TEST_CHECK(output[index] == 0);
     coefficients[0] = 16;
-    assert(cavs_inverse_transform_8x8(coefficients, output) == CAVS_OK);
-    for (index = 0U; index < 64U; ++index) assert(output[index] == 1);
+    TEST_CHECK(cavs_inverse_transform_8x8(coefficients, output) == CAVS_OK);
+    for (index = 0U; index < 64U; ++index) TEST_CHECK(output[index] == 1);
     coefficients[0] = -16;
-    assert(cavs_inverse_transform_8x8(coefficients, output) == CAVS_OK);
-    for (index = 0U; index < 64U; ++index) assert(output[index] == -1);
+    TEST_CHECK(cavs_inverse_transform_8x8(coefficients, output) == CAVS_OK);
+    for (index = 0U; index < 64U; ++index) TEST_CHECK(output[index] == -1);
 
     for (index = 0U; index < 64U; ++index)
         coefficients[index] = (int32_t)((index * 263U) % 4096U) - 2048;
     reference_transform(coefficients, expected);
-    assert(cavs_inverse_transform_8x8(coefficients, output) == CAVS_OK);
-    assert(memcmp(output, expected, sizeof(output)) == 0);
+    TEST_CHECK(cavs_inverse_transform_8x8(coefficients, output) == CAVS_OK);
+    TEST_CHECK(memcmp(output, expected, sizeof(output)) == 0);
 
     for (index = 0U; index < 64U; ++index) coefficients[index] = 8191;
     reference_transform(coefficients, expected);
-    assert(cavs_inverse_transform_8x8(coefficients, output) == CAVS_OK);
-    assert(memcmp(output, expected, sizeof(output)) == 0);
-    assert(output[0] == 255);
+    TEST_CHECK(cavs_inverse_transform_8x8(coefficients, output) == CAVS_OK);
+    TEST_CHECK(memcmp(output, expected, sizeof(output)) == 0);
+    TEST_CHECK(output[0] == 255);
 
     for (index = 0U; index < 64U; ++index) coefficients[index] = -8192;
     reference_transform(coefficients, expected);
-    assert(cavs_inverse_transform_8x8(coefficients, output) == CAVS_OK);
-    assert(memcmp(output, expected, sizeof(output)) == 0);
-    assert(output[0] == -256);
+    TEST_CHECK(cavs_inverse_transform_8x8(coefficients, output) == CAVS_OK);
+    TEST_CHECK(memcmp(output, expected, sizeof(output)) == 0);
+    TEST_CHECK(output[0] == -256);
 
     memset(coefficients, 0, sizeof(coefficients));
     coefficients[63] = 8192;
     memset(unchanged, 0x3c, sizeof(unchanged));
     memcpy(output, unchanged, sizeof(output));
-    assert(cavs_inverse_transform_8x8(coefficients, output) ==
+    TEST_CHECK(cavs_inverse_transform_8x8(coefficients, output) ==
            CAVS_ERR_CORRUPT_BITSTREAM);
-    assert(memcmp(output, unchanged, sizeof(output)) == 0);
-    assert(cavs_inverse_transform_8x8(NULL, output) == CAVS_ERR_INVALID_ARGUMENT);
-    assert(cavs_inverse_transform_8x8(coefficients, NULL) ==
+    TEST_CHECK(memcmp(output, unchanged, sizeof(output)) == 0);
+    TEST_CHECK(cavs_inverse_transform_8x8(NULL, output) == CAVS_ERR_INVALID_ARGUMENT);
+    TEST_CHECK(cavs_inverse_transform_8x8(coefficients, NULL) ==
            CAVS_ERR_INVALID_ARGUMENT);
 }
 
@@ -236,12 +236,12 @@ static void test_reconstruction_pipeline(void) {
     memset(predicted, 0, sizeof(predicted));
     memset(weights, 128, sizeof(weights));
     scan[0] = 8;
-    assert(cavs_inverse_scan_8x8(scan, CAVS_SCAN_8X8_FRAME, matrix) == CAVS_OK);
-    assert(cavs_inverse_quantize_8x8(matrix, predicted, weights, 0U,
+    TEST_CHECK(cavs_inverse_scan_8x8(scan, CAVS_SCAN_8X8_FRAME, matrix) == CAVS_OK);
+    TEST_CHECK(cavs_inverse_quantize_8x8(matrix, predicted, weights, 0U,
                                     coefficients) == CAVS_OK);
-    assert(coefficients[0] == 16);
-    assert(cavs_inverse_transform_8x8(coefficients, residual) == CAVS_OK);
-    for (index = 0U; index < 64U; ++index) assert(residual[index] == 1);
+    TEST_CHECK(coefficients[0] == 16);
+    TEST_CHECK(cavs_inverse_transform_8x8(coefficients, residual) == CAVS_OK);
+    for (index = 0U; index < 64U; ++index) TEST_CHECK(residual[index] == 1);
 }
 
 void test_reconstruction(void) {

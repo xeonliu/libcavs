@@ -5,7 +5,7 @@
  * GB/T 20090.2-2013 chroma interpolation tests.
  */
 #include "motion.h"
-#include <assert.h>
+#include "test.h"
 #include <stdint.h>
 #include <string.h>
 
@@ -58,33 +58,33 @@ static void test_motion_prediction_normalization(void) {
     cavs_motion_vector prediction;
     clear_motion_candidates(candidates);
     candidates[CAVS_MOTION_NEIGHBOR_A] = motion_candidate(7, -9, 3U, 0);
-    assert(cavs_predict_luma_motion(
+    TEST_CHECK(cavs_predict_luma_motion(
                candidates, 0, 3U, CAVS_MOTION_PARTITION_OTHER,
                CAVS_LUMA_MOTION_QUARTER, &prediction) == CAVS_OK);
-    assert(prediction.x == 7 && prediction.y == -9);
+    TEST_CHECK(prediction.x == 7 && prediction.y == -9);
 
     clear_motion_candidates(candidates);
     candidates[CAVS_MOTION_NEIGHBOR_D] = motion_candidate(-12, 18, 5U, 1);
-    assert(cavs_predict_luma_motion(
+    TEST_CHECK(cavs_predict_luma_motion(
                candidates, 1, 5U, CAVS_MOTION_PARTITION_OTHER,
                CAVS_LUMA_MOTION_QUARTER, &prediction) == CAVS_OK);
-    assert(prediction.x == -12 && prediction.y == 18);
+    TEST_CHECK(prediction.x == -12 && prediction.y == 18);
 
     candidates[CAVS_MOTION_NEIGHBOR_C] = motion_candidate(99, 99, 2U, 1);
     candidates[CAVS_MOTION_NEIGHBOR_C].intra = 1U;
-    assert(cavs_predict_luma_motion(
+    TEST_CHECK(cavs_predict_luma_motion(
                candidates, 1, 5U, CAVS_MOTION_PARTITION_OTHER,
                CAVS_LUMA_MOTION_QUARTER, &prediction) == CAVS_OK);
-    assert(prediction.x == 0 && prediction.y == 0);
+    TEST_CHECK(prediction.x == 0 && prediction.y == 0);
 
     clear_motion_candidates(candidates);
     candidates[0] = motion_candidate(50, 60, 1U, 0);
     candidates[0].same_direction = 0U;
     candidates[1] = motion_candidate(-3, 4, 1U, 0);
-    assert(cavs_predict_luma_motion(
+    TEST_CHECK(cavs_predict_luma_motion(
                candidates, 0, 1U, CAVS_MOTION_PARTITION_OTHER,
                CAVS_LUMA_MOTION_QUARTER, &prediction) == CAVS_OK);
-    assert(prediction.x == -3 && prediction.y == 4);
+    TEST_CHECK(prediction.x == -3 && prediction.y == 4);
 }
 
 static void test_motion_prediction_partition_shortcuts(void) {
@@ -94,22 +94,22 @@ static void test_motion_prediction_partition_shortcuts(void) {
     candidates[0] = motion_candidate(1, 11, 1U, 2);
     candidates[1] = motion_candidate(2, 12, 1U, 2);
     candidates[2] = motion_candidate(3, 13, 1U, 2);
-    assert(cavs_predict_luma_motion(
+    TEST_CHECK(cavs_predict_luma_motion(
                candidates, 2, 1U, CAVS_MOTION_PARTITION_8X16_LEFT,
                CAVS_LUMA_MOTION_QUARTER, &prediction) == CAVS_OK);
-    assert(prediction.x == 1 && prediction.y == 11);
-    assert(cavs_predict_luma_motion(
+    TEST_CHECK(prediction.x == 1 && prediction.y == 11);
+    TEST_CHECK(cavs_predict_luma_motion(
                candidates, 2, 1U, CAVS_MOTION_PARTITION_8X16_RIGHT,
                CAVS_LUMA_MOTION_QUARTER, &prediction) == CAVS_OK);
-    assert(prediction.x == 3 && prediction.y == 13);
-    assert(cavs_predict_luma_motion(
+    TEST_CHECK(prediction.x == 3 && prediction.y == 13);
+    TEST_CHECK(cavs_predict_luma_motion(
                candidates, 2, 1U, CAVS_MOTION_PARTITION_16X8_TOP,
                CAVS_LUMA_MOTION_QUARTER, &prediction) == CAVS_OK);
-    assert(prediction.x == 2 && prediction.y == 12);
-    assert(cavs_predict_luma_motion(
+    TEST_CHECK(prediction.x == 2 && prediction.y == 12);
+    TEST_CHECK(cavs_predict_luma_motion(
                candidates, 2, 1U, CAVS_MOTION_PARTITION_16X8_BOTTOM,
                CAVS_LUMA_MOTION_QUARTER, &prediction) == CAVS_OK);
-    assert(prediction.x == 1 && prediction.y == 11);
+    TEST_CHECK(prediction.x == 1 && prediction.y == 11);
 }
 
 static void set_median_candidates(
@@ -125,20 +125,20 @@ static void test_motion_prediction_median_selection(void) {
     cavs_motion_candidate candidates[CAVS_MOTION_NEIGHBOR_COUNT];
     cavs_motion_vector prediction;
     set_median_candidates(candidates, 0, 10, 15);
-    assert(cavs_predict_luma_motion(
+    TEST_CHECK(cavs_predict_luma_motion(
                candidates, 0, 1U, CAVS_MOTION_PARTITION_OTHER,
                CAVS_LUMA_MOTION_QUARTER, &prediction) == CAVS_OK);
-    assert(prediction.x == 15);
+    TEST_CHECK(prediction.x == 15);
     set_median_candidates(candidates, 0, 10, 30);
-    assert(cavs_predict_luma_motion(
+    TEST_CHECK(cavs_predict_luma_motion(
                candidates, 0, 1U, CAVS_MOTION_PARTITION_OTHER,
                CAVS_LUMA_MOTION_QUARTER, &prediction) == CAVS_OK);
-    assert(prediction.x == 0);
+    TEST_CHECK(prediction.x == 0);
     set_median_candidates(candidates, 0, 30, 20);
-    assert(cavs_predict_luma_motion(
+    TEST_CHECK(cavs_predict_luma_motion(
                candidates, 0, 1U, CAVS_MOTION_PARTITION_OTHER,
                CAVS_LUMA_MOTION_QUARTER, &prediction) == CAVS_OK);
-    assert(prediction.x == 30);
+    TEST_CHECK(prediction.x == 30);
 }
 
 static void test_motion_prediction_scaling(void) {
@@ -148,53 +148,53 @@ static void test_motion_prediction_scaling(void) {
     candidates[0] = motion_candidate(10, -11, 2U, 0);
     candidates[1] = motion_candidate(40, -44, 4U, 0);
     candidates[2] = motion_candidate(30, -33, 6U, 0);
-    assert(cavs_predict_luma_motion(
+    TEST_CHECK(cavs_predict_luma_motion(
                candidates, 0, 4U, CAVS_MOTION_PARTITION_OTHER,
                CAVS_LUMA_MOTION_QUARTER, &prediction) == CAVS_OK);
-    assert(prediction.x == 20 && prediction.y == -22);
+    TEST_CHECK(prediction.x == 20 && prediction.y == -22);
 
     candidates[0] = motion_candidate(4095, 4095, 1U, 0);
     candidates[1] = candidates[0];
     candidates[2] = candidates[0];
     prediction.x = 77;
     prediction.y = 88;
-    assert(cavs_predict_luma_motion(
+    TEST_CHECK(cavs_predict_luma_motion(
                candidates, 0, 511U, CAVS_MOTION_PARTITION_OTHER,
                CAVS_LUMA_MOTION_QUARTER, &prediction) == CAVS_OK);
-    assert(prediction.x == 2092545 && prediction.y == 2092545);
+    TEST_CHECK(prediction.x == 2092545 && prediction.y == 2092545);
 }
 
 static void test_motion_difference_decoding(void) {
     cavs_motion_vector prediction = {4000, -4000};
     cavs_motion_vector difference = {95, -96};
     cavs_motion_vector decoded = {77, 88};
-    assert(cavs_decode_luma_motion(
+    TEST_CHECK(cavs_decode_luma_motion(
                &prediction, &difference, CAVS_LUMA_MOTION_QUARTER,
                &decoded) == CAVS_OK);
-    assert(decoded.x == 4095 && decoded.y == -4096);
+    TEST_CHECK(decoded.x == 4095 && decoded.y == -4096);
     difference.x = 96;
     decoded.x = 77;
     decoded.y = 88;
-    assert(cavs_decode_luma_motion(
+    TEST_CHECK(cavs_decode_luma_motion(
                &prediction, &difference, CAVS_LUMA_MOTION_QUARTER,
                &decoded) == CAVS_ERR_CORRUPT_BITSTREAM);
-    assert(decoded.x == 77 && decoded.y == 88);
+    TEST_CHECK(decoded.x == 77 && decoded.y == 88);
     prediction.x = -8000;
     prediction.y = 8000;
     difference.x = -192;
     difference.y = 191;
-    assert(cavs_decode_luma_motion(
+    TEST_CHECK(cavs_decode_luma_motion(
                &prediction, &difference, CAVS_LUMA_MOTION_EIGHTH,
                &decoded) == CAVS_OK);
-    assert(decoded.x == -8192 && decoded.y == 8191);
+    TEST_CHECK(decoded.x == -8192 && decoded.y == 8191);
     prediction.x = 5000;
     prediction.y = -5000;
     difference.x = -1000;
     difference.y = 1000;
-    assert(cavs_decode_luma_motion(
+    TEST_CHECK(cavs_decode_luma_motion(
                &prediction, &difference, CAVS_LUMA_MOTION_QUARTER,
                &decoded) == CAVS_OK);
-    assert(decoded.x == 4000 && decoded.y == -4000);
+    TEST_CHECK(decoded.x == 4000 && decoded.y == -4000);
 }
 
 static void test_motion_prediction_invalid(void) {
@@ -202,42 +202,42 @@ static void test_motion_prediction_invalid(void) {
     cavs_motion_vector prediction = {77, 88};
     clear_motion_candidates(candidates);
     candidates[0] = motion_candidate(1, 2, 0U, 0);
-    assert(cavs_predict_luma_motion(
+    TEST_CHECK(cavs_predict_luma_motion(
                candidates, 0, 1U, CAVS_MOTION_PARTITION_OTHER,
                CAVS_LUMA_MOTION_QUARTER, &prediction) ==
            CAVS_ERR_INVALID_ARGUMENT);
-    assert(prediction.x == 77 && prediction.y == 88);
+    TEST_CHECK(prediction.x == 77 && prediction.y == 88);
     candidates[0] = motion_candidate(1, 2, 1U, 0);
     candidates[0].available = 2U;
-    assert(cavs_predict_luma_motion(
+    TEST_CHECK(cavs_predict_luma_motion(
                candidates, 0, 1U, CAVS_MOTION_PARTITION_OTHER,
                CAVS_LUMA_MOTION_QUARTER, &prediction) ==
            CAVS_ERR_INVALID_ARGUMENT);
-    assert(cavs_predict_luma_motion(
+    TEST_CHECK(cavs_predict_luma_motion(
                NULL, 0, 1U, CAVS_MOTION_PARTITION_OTHER,
                CAVS_LUMA_MOTION_QUARTER, &prediction) ==
            CAVS_ERR_INVALID_ARGUMENT);
     clear_motion_candidates(candidates);
     candidates[0] = motion_candidate(8191, -8192, 1U, 0);
-    assert(cavs_predict_luma_motion(
+    TEST_CHECK(cavs_predict_luma_motion(
                candidates, 0, 1U, CAVS_MOTION_PARTITION_OTHER,
                CAVS_LUMA_MOTION_EIGHTH, &prediction) == CAVS_OK);
-    assert(prediction.x == 8191 && prediction.y == -8192);
+    TEST_CHECK(prediction.x == 8191 && prediction.y == -8192);
     prediction.x = 77;
     prediction.y = 88;
-    assert(cavs_predict_luma_motion(
+    TEST_CHECK(cavs_predict_luma_motion(
                candidates, 0, 1U, CAVS_MOTION_PARTITION_OTHER,
                CAVS_LUMA_MOTION_QUARTER, &prediction) ==
            CAVS_ERR_INVALID_ARGUMENT);
-    assert(cavs_predict_luma_motion(
+    TEST_CHECK(cavs_predict_luma_motion(
                candidates, 4, 1U, CAVS_MOTION_PARTITION_OTHER,
                CAVS_LUMA_MOTION_EIGHTH, &prediction) ==
            CAVS_ERR_INVALID_ARGUMENT);
-    assert(cavs_predict_luma_motion(
+    TEST_CHECK(cavs_predict_luma_motion(
                candidates, 0, 1U, (cavs_motion_partition_position)5,
                CAVS_LUMA_MOTION_EIGHTH, &prediction) ==
            CAVS_ERR_INVALID_ARGUMENT);
-    assert(cavs_predict_luma_motion(
+    TEST_CHECK(cavs_predict_luma_motion(
                candidates, 0, 1U, CAVS_MOTION_PARTITION_OTHER,
                (cavs_luma_motion_precision)1, &prediction) ==
            CAVS_ERR_INVALID_ARGUMENT);
@@ -250,36 +250,36 @@ static void test_p_skip_motion(void) {
     candidates[0] = motion_candidate(4, 8, 2U, 0);
     candidates[1] = motion_candidate(8, 16, 4U, 0);
     candidates[2] = motion_candidate(12, 24, 6U, 0);
-    assert(cavs_derive_p_skip_motion(
+    TEST_CHECK(cavs_derive_p_skip_motion(
                candidates, 4U, CAVS_LUMA_MOTION_QUARTER,
                &motion) == CAVS_OK);
-    assert(motion.x == 8 && motion.y == 16);
+    TEST_CHECK(motion.x == 8 && motion.y == 16);
 
     candidates[0].available = 0U;
-    assert(cavs_derive_p_skip_motion(
+    TEST_CHECK(cavs_derive_p_skip_motion(
                candidates, 4U, CAVS_LUMA_MOTION_QUARTER,
                &motion) == CAVS_OK);
-    assert(motion.x == 0 && motion.y == 0);
+    TEST_CHECK(motion.x == 0 && motion.y == 0);
     candidates[0] = motion_candidate(0, 0, 2U, 0);
-    assert(cavs_derive_p_skip_motion(
+    TEST_CHECK(cavs_derive_p_skip_motion(
                candidates, 4U, CAVS_LUMA_MOTION_QUARTER,
                &motion) == CAVS_OK);
-    assert(motion.x == 0 && motion.y == 0);
+    TEST_CHECK(motion.x == 0 && motion.y == 0);
 
     candidates[0].intra = 1U;
     candidates[1] = motion_candidate(9, -7, 4U, 0);
     candidates[2].available = 0U;
-    assert(cavs_derive_p_skip_motion(
+    TEST_CHECK(cavs_derive_p_skip_motion(
                candidates, 4U, CAVS_LUMA_MOTION_QUARTER,
                &motion) == CAVS_OK);
-    assert(motion.x == 9 && motion.y == -7);
+    TEST_CHECK(motion.x == 9 && motion.y == -7);
 
     motion.x = 77;
     motion.y = 88;
-    assert(cavs_derive_p_skip_motion(
+    TEST_CHECK(cavs_derive_p_skip_motion(
                candidates, 0U, CAVS_LUMA_MOTION_QUARTER,
                &motion) == CAVS_ERR_INVALID_ARGUMENT);
-    assert(motion.x == 77 && motion.y == 88);
+    TEST_CHECK(motion.x == 77 && motion.y == 88);
 }
 
 static void test_symmetric_motion(void) {
@@ -287,33 +287,33 @@ static void test_symmetric_motion(void) {
     cavs_bidirectional_motion motion;
     cavs_bidirectional_motion unchanged;
     memset(&motion, 0xa5, sizeof(motion));
-    assert(cavs_derive_symmetric_motion(
+    TEST_CHECK(cavs_derive_symmetric_motion(
                &forward, 1, 1U, 3U, 2U,
                CAVS_LUMA_MOTION_QUARTER, &motion) == CAVS_OK);
-    assert(motion.forward.x == 3 && motion.forward.y == -3);
-    assert(motion.forward_reference_index == 1);
-    assert(motion.backward_reference_index == 1);
-    assert(motion.backward.x == -2 && motion.backward.y == 2);
+    TEST_CHECK(motion.forward.x == 3 && motion.forward.y == -3);
+    TEST_CHECK(motion.forward_reference_index == 1);
+    TEST_CHECK(motion.backward_reference_index == 1);
+    TEST_CHECK(motion.backward.x == -2 && motion.backward.y == 2);
 
-    assert(cavs_derive_symmetric_motion(
+    TEST_CHECK(cavs_derive_symmetric_motion(
                &forward, 1, 0U, 3U, 2U,
                CAVS_LUMA_MOTION_QUARTER, &motion) == CAVS_OK);
-    assert(motion.backward_reference_index == 0);
+    TEST_CHECK(motion.backward_reference_index == 0);
 
     memset(&motion, 0xa5, sizeof(motion));
     unchanged = motion;
-    assert(cavs_derive_symmetric_motion(
+    TEST_CHECK(cavs_derive_symmetric_motion(
                &forward, 1, 1U, 0U, 2U,
                CAVS_LUMA_MOTION_QUARTER, &motion) ==
            CAVS_ERR_INVALID_ARGUMENT);
-    assert(memcmp(&motion, &unchanged, sizeof(motion)) == 0);
+    TEST_CHECK(memcmp(&motion, &unchanged, sizeof(motion)) == 0);
     forward.x = 4095;
     forward.y = -4096;
-    assert(cavs_derive_symmetric_motion(
+    TEST_CHECK(cavs_derive_symmetric_motion(
                &forward, 0, 1U, 1U, 511U,
                CAVS_LUMA_MOTION_QUARTER, &motion) ==
            CAVS_ERR_CORRUPT_BITSTREAM);
-    assert(memcmp(&motion, &unchanged, sizeof(motion)) == 0);
+    TEST_CHECK(memcmp(&motion, &unchanged, sizeof(motion)) == 0);
 }
 
 static void test_direct_motion(void) {
@@ -321,47 +321,47 @@ static void test_direct_motion(void) {
     cavs_bidirectional_motion motion;
     cavs_bidirectional_motion unchanged;
     memset(&motion, 0, sizeof(motion));
-    assert(cavs_derive_direct_motion(
+    TEST_CHECK(cavs_derive_direct_motion(
                &colocated, 0, 1, 1U, 1U, 5U, 2U, 3U,
                CAVS_LUMA_MOTION_QUARTER, &motion) == CAVS_OK);
-    assert(motion.forward_reference_index == 0);
-    assert(motion.backward_reference_index == 1);
-    assert(motion.forward.x == 1 && motion.forward.y == -1);
-    assert(motion.backward.x == -1 && motion.backward.y == 1);
+    TEST_CHECK(motion.forward_reference_index == 0);
+    TEST_CHECK(motion.backward_reference_index == 1);
+    TEST_CHECK(motion.forward.x == 1 && motion.forward.y == -1);
+    TEST_CHECK(motion.backward.x == -1 && motion.backward.y == 1);
 
     colocated.x = 0;
     colocated.y = 0;
-    assert(cavs_derive_direct_motion(
+    TEST_CHECK(cavs_derive_direct_motion(
                &colocated, 2, 3, 1U, 1U, 7U, 4U, 6U,
                CAVS_LUMA_MOTION_EIGHTH, &motion) == CAVS_OK);
-    assert(motion.forward.x == 0 && motion.forward.y == 0);
-    assert(motion.backward.x == 0 && motion.backward.y == 0);
+    TEST_CHECK(motion.forward.x == 0 && motion.forward.y == 0);
+    TEST_CHECK(motion.backward.x == 0 && motion.backward.y == 0);
 
     colocated.y = 3;
-    assert(cavs_derive_direct_motion(
+    TEST_CHECK(cavs_derive_direct_motion(
                &colocated, 0, 1, 1U, 0U, 5U, 2U, 3U,
                CAVS_LUMA_MOTION_QUARTER, &motion) == CAVS_OK);
-    assert(motion.forward.y == 2 && motion.backward.y == -3);
+    TEST_CHECK(motion.forward.y == 2 && motion.backward.y == -3);
     colocated.y = -3;
-    assert(cavs_derive_direct_motion(
+    TEST_CHECK(cavs_derive_direct_motion(
                &colocated, 0, 1, 0U, 1U, 1U, 1U, 1U,
                CAVS_LUMA_MOTION_QUARTER, &motion) == CAVS_OK);
-    assert(motion.forward.y == -1 && motion.backward.y == 1);
+    TEST_CHECK(motion.forward.y == -1 && motion.backward.y == 1);
 
     memset(&motion, 0xa5, sizeof(motion));
     unchanged = motion;
-    assert(cavs_derive_direct_motion(
+    TEST_CHECK(cavs_derive_direct_motion(
                &colocated, 0, 1, 1U, 1U, 0U, 2U, 3U,
                CAVS_LUMA_MOTION_QUARTER, &motion) ==
            CAVS_ERR_INVALID_ARGUMENT);
-    assert(memcmp(&motion, &unchanged, sizeof(motion)) == 0);
+    TEST_CHECK(memcmp(&motion, &unchanged, sizeof(motion)) == 0);
     colocated.x = 4095;
     colocated.y = -4096;
-    assert(cavs_derive_direct_motion(
+    TEST_CHECK(cavs_derive_direct_motion(
                &colocated, 0, 1, 1U, 1U, 1U, 511U, 511U,
                CAVS_LUMA_MOTION_QUARTER, &motion) ==
            CAVS_ERR_CORRUPT_BITSTREAM);
-    assert(memcmp(&motion, &unchanged, sizeof(motion)) == 0);
+    TEST_CHECK(memcmp(&motion, &unchanged, sizeof(motion)) == 0);
 }
 
 static void test_chroma_integer_and_stride(void) {
@@ -371,36 +371,36 @@ static void test_chroma_integer_and_stride(void) {
     size_t y;
     fill_motion_plane(plane, 12U, 12U, 16U);
     memset(prediction, 0xa5, sizeof(prediction));
-    assert(cavs_interpolate_chroma_block(
+    TEST_CHECK(cavs_interpolate_chroma_block(
                plane, 12U, 12U, 16U, 3U, 2U, 8U, 8U, 0, 0,
                CAVS_CHROMA_MOTION_EIGHTH, prediction, 10U) == CAVS_OK);
     for (y = 0U; y < 8U; ++y) {
         for (x = 0U; x < 8U; ++x)
-            assert(prediction[y * 10U + x] == plane[(y + 2U) * 16U + x + 3U]);
-        assert(prediction[y * 10U + 8U] == 0xa5U);
-        assert(prediction[y * 10U + 9U] == 0xa5U);
+            TEST_CHECK(prediction[y * 10U + x] == plane[(y + 2U) * 16U + x + 3U]);
+        TEST_CHECK(prediction[y * 10U + 8U] == 0xa5U);
+        TEST_CHECK(prediction[y * 10U + 9U] == 0xa5U);
     }
 }
 
 static void test_chroma_motion_derivation(void) {
     int32_t chroma_x = 99;
     int32_t chroma_y = 99;
-    assert(cavs_derive_chroma_motion(
+    TEST_CHECK(cavs_derive_chroma_motion(
                CAVS_YUV420P8, -13, 17, &chroma_x, &chroma_y) == CAVS_OK);
-    assert(chroma_x == -13 && chroma_y == 17);
-    assert(cavs_derive_chroma_motion(
+    TEST_CHECK(chroma_x == -13 && chroma_y == 17);
+    TEST_CHECK(cavs_derive_chroma_motion(
                CAVS_YUV422P8, -13, 17, &chroma_x, &chroma_y) == CAVS_OK);
-    assert(chroma_x == -13 && chroma_y == 34);
+    TEST_CHECK(chroma_x == -13 && chroma_y == 34);
     chroma_x = 99;
     chroma_y = 99;
-    assert(cavs_derive_chroma_motion(
+    TEST_CHECK(cavs_derive_chroma_motion(
                CAVS_YUV422P8, 0, INT32_MAX, &chroma_x, &chroma_y) ==
            CAVS_ERR_INVALID_ARGUMENT);
-    assert(chroma_x == 99 && chroma_y == 99);
-    assert(cavs_derive_chroma_motion(
+    TEST_CHECK(chroma_x == 99 && chroma_y == 99);
+    TEST_CHECK(cavs_derive_chroma_motion(
                (cavs_pixel_format)2, 0, 0, &chroma_x, &chroma_y) ==
            CAVS_ERR_INVALID_ARGUMENT);
-    assert(cavs_derive_chroma_motion(
+    TEST_CHECK(cavs_derive_chroma_motion(
                CAVS_YUV420P8, 0, 0, NULL, &chroma_y) ==
            CAVS_ERR_INVALID_ARGUMENT);
 }
@@ -410,23 +410,23 @@ static void test_chroma_fractional(void) {
     uint8_t prediction[4];
     uint32_t expected;
     fill_motion_plane(plane, 8U, 8U, 8U);
-    assert(cavs_interpolate_chroma_block(
+    TEST_CHECK(cavs_interpolate_chroma_block(
                plane, 8U, 8U, 8U, 2U, 2U, 1U, 1U, 3, 5,
                CAVS_CHROMA_MOTION_EIGHTH, prediction, 1U) == CAVS_OK);
     expected = (5U * 3U * plane[2U * 8U + 2U] +
                 3U * 3U * plane[2U * 8U + 3U] +
                 5U * 5U * plane[3U * 8U + 2U] +
                 3U * 5U * plane[3U * 8U + 3U] + 32U) >> 6U;
-    assert(prediction[0] == expected);
+    TEST_CHECK(prediction[0] == expected);
 
-    assert(cavs_interpolate_chroma_block(
+    TEST_CHECK(cavs_interpolate_chroma_block(
                plane, 8U, 8U, 8U, 2U, 2U, 1U, 1U, 7, 11,
                CAVS_CHROMA_MOTION_SIXTEENTH, prediction, 1U) == CAVS_OK);
     expected = (9U * 5U * plane[2U * 8U + 2U] +
                 7U * 5U * plane[2U * 8U + 3U] +
                 9U * 11U * plane[3U * 8U + 2U] +
                 7U * 11U * plane[3U * 8U + 3U] + 128U) >> 8U;
-    assert(prediction[0] == expected);
+    TEST_CHECK(prediction[0] == expected);
 }
 
 static void test_chroma_all_fractional_phases(void) {
@@ -445,12 +445,12 @@ static void test_chroma_all_fractional_phases(void) {
                      dx * (denominator - dy) * plane[1] +
                      (denominator - dx) * dy * plane[2] +
                      dx * dy * plane[3] + scale / 2U) / scale;
-                assert(cavs_interpolate_chroma_block(
+                TEST_CHECK(cavs_interpolate_chroma_block(
                            plane, 2U, 2U, 2U, 0U, 0U, 1U, 1U,
                            (int32_t)dx, (int32_t)dy,
                            (cavs_chroma_motion_precision)precision,
                            prediction, 1U) == CAVS_OK);
-                assert(prediction[0] == expected);
+                TEST_CHECK(prediction[0] == expected);
             }
         }
     }
@@ -461,31 +461,31 @@ static void test_chroma_negative_motion(void) {
     uint8_t prediction[4];
     uint32_t expected;
     fill_motion_plane(plane, 8U, 8U, 8U);
-    assert(cavs_interpolate_chroma_block(
+    TEST_CHECK(cavs_interpolate_chroma_block(
                plane, 8U, 8U, 8U, 4U, 4U, 1U, 1U, -1, -1,
                CAVS_CHROMA_MOTION_EIGHTH, prediction, 1U) == CAVS_OK);
     expected = (plane[3U * 8U + 3U] + 7U * plane[3U * 8U + 4U] +
                 7U * plane[4U * 8U + 3U] + 49U * plane[4U * 8U + 4U] +
                 32U) >> 6U;
-    assert(prediction[0] == expected);
+    TEST_CHECK(prediction[0] == expected);
 }
 
 static void test_chroma_edge_replacement(void) {
     uint8_t plane[8U * 8U];
     uint8_t prediction[4];
     fill_motion_plane(plane, 8U, 8U, 8U);
-    assert(cavs_interpolate_chroma_block(
+    TEST_CHECK(cavs_interpolate_chroma_block(
                plane, 8U, 8U, 8U, 0U, 0U, 1U, 1U, -1, -1,
                CAVS_CHROMA_MOTION_EIGHTH, prediction, 1U) == CAVS_OK);
-    assert(prediction[0] == plane[0]);
-    assert(cavs_interpolate_chroma_block(
+    TEST_CHECK(prediction[0] == plane[0]);
+    TEST_CHECK(cavs_interpolate_chroma_block(
                plane, 8U, 8U, 8U, 0U, 0U, 1U, 1U, INT32_MIN, INT32_MIN,
                CAVS_CHROMA_MOTION_EIGHTH, prediction, 1U) == CAVS_OK);
-    assert(prediction[0] == plane[0]);
-    assert(cavs_interpolate_chroma_block(
+    TEST_CHECK(prediction[0] == plane[0]);
+    TEST_CHECK(cavs_interpolate_chroma_block(
                plane, 8U, 8U, 8U, 7U, 7U, 1U, 1U, INT32_MAX, INT32_MAX,
                CAVS_CHROMA_MOTION_SIXTEENTH, prediction, 1U) == CAVS_OK);
-    assert(prediction[0] == plane[7U * 8U + 7U]);
+    TEST_CHECK(prediction[0] == plane[7U * 8U + 7U]);
 }
 
 static void test_chroma_invalid_atomic(void) {
@@ -495,20 +495,20 @@ static void test_chroma_invalid_atomic(void) {
     fill_motion_plane(plane, 8U, 8U, 8U);
     memset(prediction, 0xa5, sizeof(prediction));
     memcpy(unchanged, prediction, sizeof(prediction));
-    assert(cavs_interpolate_chroma_block(
+    TEST_CHECK(cavs_interpolate_chroma_block(
                plane, 8U, 8U, 7U, 0U, 0U, 1U, 1U, 0, 0,
                CAVS_CHROMA_MOTION_EIGHTH, prediction, 1U) ==
            CAVS_ERR_INVALID_ARGUMENT);
-    assert(memcmp(prediction, unchanged, sizeof(prediction)) == 0);
-    assert(cavs_interpolate_chroma_block(
+    TEST_CHECK(memcmp(prediction, unchanged, sizeof(prediction)) == 0);
+    TEST_CHECK(cavs_interpolate_chroma_block(
                plane, 8U, 8U, 8U, 1U, 1U, 8U, 8U, 0, 0,
                CAVS_CHROMA_MOTION_EIGHTH, prediction, 8U) ==
            CAVS_ERR_INVALID_ARGUMENT);
-    assert(cavs_interpolate_chroma_block(
+    TEST_CHECK(cavs_interpolate_chroma_block(
                plane, 8U, 8U, 8U, 0U, 0U, 1U, 1U, 0, 0,
                (cavs_chroma_motion_precision)2, prediction, 1U) ==
            CAVS_ERR_INVALID_ARGUMENT);
-    assert(cavs_interpolate_chroma_block(
+    TEST_CHECK(cavs_interpolate_chroma_block(
                NULL, 8U, 8U, 8U, 0U, 0U, 1U, 1U, 0, 0,
                CAVS_CHROMA_MOTION_EIGHTH, prediction, 1U) ==
            CAVS_ERR_INVALID_ARGUMENT);
@@ -528,11 +528,11 @@ static void test_luma_all_quarter_phases(void) {
     for (fraction_y = 0U; fraction_y < 4U; ++fraction_y) {
         unsigned fraction_x;
         for (fraction_x = 0U; fraction_x < 4U; ++fraction_x) {
-            assert(cavs_interpolate_luma_block_quarter(
+            TEST_CHECK(cavs_interpolate_luma_block_quarter(
                        plane, 10U, 10U, 12U, 4U, 4U, 1U, 1U,
                        (int32_t)fraction_x, (int32_t)fraction_y,
                        prediction, 1U) == CAVS_OK);
-            assert(prediction[0] == expected[fraction_y * 4U + fraction_x]);
+            TEST_CHECK(prediction[0] == expected[fraction_y * 4U + fraction_x]);
         }
     }
 }
@@ -544,15 +544,15 @@ static void test_luma_block_and_stride(void) {
     size_t y;
     fill_motion_plane(plane, 12U, 12U, 16U);
     memset(prediction, 0xa5, sizeof(prediction));
-    assert(cavs_interpolate_luma_block_quarter(
+    TEST_CHECK(cavs_interpolate_luma_block_quarter(
                plane, 12U, 12U, 16U, 2U, 2U, 8U, 8U, 4, 4,
                prediction, 10U) == CAVS_OK);
     for (y = 0U; y < 8U; ++y) {
         for (x = 0U; x < 8U; ++x)
-            assert(prediction[y * 10U + x] ==
+            TEST_CHECK(prediction[y * 10U + x] ==
                    plane[(y + 3U) * 16U + x + 3U]);
-        assert(prediction[y * 10U + 8U] == 0xa5U);
-        assert(prediction[y * 10U + 9U] == 0xa5U);
+        TEST_CHECK(prediction[y * 10U + 8U] == 0xa5U);
+        TEST_CHECK(prediction[y * 10U + 9U] == 0xa5U);
     }
 }
 
@@ -565,49 +565,49 @@ static void test_luma_clipping(void) {
         plane[y * 6U + 1U] = 255U;
         plane[y * 6U + 4U] = 255U;
     }
-    assert(cavs_interpolate_luma_block_quarter(
+    TEST_CHECK(cavs_interpolate_luma_block_quarter(
                plane, 6U, 6U, 6U, 2U, 2U, 1U, 1U, 2, 0,
                prediction, 1U) == CAVS_OK);
-    assert(prediction[0] == 0U);
+    TEST_CHECK(prediction[0] == 0U);
     for (y = 0U; y < 6U; ++y) {
         plane[y * 6U + 1U] = 0U;
         plane[y * 6U + 2U] = 255U;
         plane[y * 6U + 3U] = 255U;
         plane[y * 6U + 4U] = 0U;
     }
-    assert(cavs_interpolate_luma_block_quarter(
+    TEST_CHECK(cavs_interpolate_luma_block_quarter(
                plane, 6U, 6U, 6U, 2U, 2U, 1U, 1U, 2, 0,
                prediction, 1U) == CAVS_OK);
-    assert(prediction[0] == 255U);
+    TEST_CHECK(prediction[0] == 255U);
 }
 
 static void test_luma_negative_and_edges(void) {
     uint8_t plane[10U * 10U];
     uint8_t prediction[1];
     fill_luma_pattern(plane, 10U, 10U, 10U);
-    assert(cavs_interpolate_luma_block_quarter(
+    TEST_CHECK(cavs_interpolate_luma_block_quarter(
                plane, 10U, 10U, 10U, 0U, 0U, 1U, 1U, -1, -1,
                prediction, 1U) == CAVS_OK);
-    assert(prediction[0] == 11U);
-    assert(cavs_interpolate_luma_block_quarter(
+    TEST_CHECK(prediction[0] == 11U);
+    TEST_CHECK(cavs_interpolate_luma_block_quarter(
                plane, 10U, 10U, 10U, 0U, 0U, 1U, 1U,
                INT32_MIN, INT32_MIN, prediction, 1U) == CAVS_OK);
-    assert(prediction[0] == plane[0]);
-    assert(cavs_interpolate_luma_block_quarter(
+    TEST_CHECK(prediction[0] == plane[0]);
+    TEST_CHECK(cavs_interpolate_luma_block_quarter(
                plane, 10U, 10U, 10U, 9U, 9U, 1U, 1U,
                INT32_MAX, INT32_MAX, prediction, 1U) == CAVS_OK);
-    assert(prediction[0] == plane[9U * 10U + 9U]);
+    TEST_CHECK(prediction[0] == plane[9U * 10U + 9U]);
 }
 
 static void test_luma_in_place(void) {
     uint8_t plane[16U * 16U];
     size_t index;
     fill_motion_plane(plane, 16U, 16U, 16U);
-    assert(cavs_interpolate_luma_block_quarter(
+    TEST_CHECK(cavs_interpolate_luma_block_quarter(
                plane, 16U, 16U, 16U, 0U, 0U, 16U, 16U, 0, 0,
                plane, 16U) == CAVS_OK);
     for (index = 0U; index < sizeof(plane); ++index)
-        assert(plane[index] == (uint8_t)((index / 16U) * 16U + index % 16U));
+        TEST_CHECK(plane[index] == (uint8_t)((index / 16U) * 16U + index % 16U));
 }
 
 static void test_luma_invalid_atomic(void) {
@@ -617,14 +617,14 @@ static void test_luma_invalid_atomic(void) {
     fill_motion_plane(plane, 8U, 8U, 8U);
     memset(prediction, 0xa5, sizeof(prediction));
     memcpy(unchanged, prediction, sizeof(prediction));
-    assert(cavs_interpolate_luma_block_quarter(
+    TEST_CHECK(cavs_interpolate_luma_block_quarter(
                plane, 8U, 8U, 8U, 0U, 0U, 0U, 1U, 0, 0,
                prediction, 1U) == CAVS_ERR_INVALID_ARGUMENT);
-    assert(memcmp(prediction, unchanged, sizeof(prediction)) == 0);
-    assert(cavs_interpolate_luma_block_quarter(
+    TEST_CHECK(memcmp(prediction, unchanged, sizeof(prediction)) == 0);
+    TEST_CHECK(cavs_interpolate_luma_block_quarter(
                plane, 8U, 8U, 8U, 0U, 0U, 1U, 1U, 0, 0,
                prediction, 0U) == CAVS_ERR_INVALID_ARGUMENT);
-    assert(cavs_interpolate_luma_block_quarter(
+    TEST_CHECK(cavs_interpolate_luma_block_quarter(
                NULL, 8U, 8U, 8U, 0U, 0U, 1U, 1U, 0, 0,
                prediction, 1U) == CAVS_ERR_INVALID_ARGUMENT);
 }
@@ -647,11 +647,11 @@ static void test_luma_all_eighth_phases(void) {
     for (fraction_y = 0U; fraction_y < 8U; ++fraction_y) {
         unsigned fraction_x;
         for (fraction_x = 0U; fraction_x < 8U; ++fraction_x) {
-            assert(cavs_interpolate_luma_block_eighth(
+            TEST_CHECK(cavs_interpolate_luma_block_eighth(
                        plane, 10U, 10U, 12U, 4U, 4U, 1U, 1U,
                        (int32_t)fraction_x, (int32_t)fraction_y,
                        prediction, 1U) == CAVS_OK);
-            assert(prediction[0] == expected[fraction_y * 8U + fraction_x]);
+            TEST_CHECK(prediction[0] == expected[fraction_y * 8U + fraction_x]);
         }
     }
 }
@@ -665,13 +665,13 @@ static void test_luma_eighth_quarter_equivalence(void) {
     for (motion_y = -6; motion_y <= 6; motion_y += 2) {
         int32_t motion_x;
         for (motion_x = -6; motion_x <= 6; motion_x += 2) {
-            assert(cavs_interpolate_luma_block_eighth(
+            TEST_CHECK(cavs_interpolate_luma_block_eighth(
                        plane, 10U, 10U, 10U, 4U, 4U, 1U, 1U,
                        motion_x, motion_y, eighth, 1U) == CAVS_OK);
-            assert(cavs_interpolate_luma_block_quarter(
+            TEST_CHECK(cavs_interpolate_luma_block_quarter(
                        plane, 10U, 10U, 10U, 4U, 4U, 1U, 1U,
                        motion_x / 2, motion_y / 2, quarter, 1U) == CAVS_OK);
-            assert(eighth[0] == quarter[0]);
+            TEST_CHECK(eighth[0] == quarter[0]);
         }
     }
 }
@@ -684,31 +684,31 @@ static void test_luma_eighth_constant_and_clipping(void) {
     for (fraction_y = 0U; fraction_y < 8U; ++fraction_y) {
         unsigned fraction_x;
         for (fraction_x = 0U; fraction_x < 8U; ++fraction_x) {
-            assert(cavs_interpolate_luma_block_eighth(
+            TEST_CHECK(cavs_interpolate_luma_block_eighth(
                        plane, 8U, 8U, 8U, 3U, 3U, 1U, 1U,
                        (int32_t)fraction_x, (int32_t)fraction_y,
                        prediction, 1U) == CAVS_OK);
-            assert(prediction[0] == 123U);
+            TEST_CHECK(prediction[0] == 123U);
         }
     }
 
     memset(plane, 0, sizeof(plane));
     for (fraction_y = 0U; fraction_y < 8U; ++fraction_y)
         plane[fraction_y * 8U + 2U] = 255U;
-    assert(cavs_interpolate_luma_block_eighth(
+    TEST_CHECK(cavs_interpolate_luma_block_eighth(
                plane, 8U, 8U, 8U, 3U, 3U, 1U, 1U, 1, 0,
                prediction, 1U) == CAVS_OK);
-    assert(prediction[0] == 0U);
+    TEST_CHECK(prediction[0] == 0U);
 
     memset(plane, 0, sizeof(plane));
     for (fraction_y = 0U; fraction_y < 8U; ++fraction_y) {
         plane[fraction_y * 8U + 3U] = 255U;
         plane[fraction_y * 8U + 4U] = 255U;
     }
-    assert(cavs_interpolate_luma_block_eighth(
+    TEST_CHECK(cavs_interpolate_luma_block_eighth(
                plane, 8U, 8U, 8U, 3U, 3U, 1U, 1U, 1, 0,
                prediction, 1U) == CAVS_OK);
-    assert(prediction[0] == 255U);
+    TEST_CHECK(prediction[0] == 255U);
 }
 
 static void test_luma_eighth_block_and_stride(void) {
@@ -718,15 +718,15 @@ static void test_luma_eighth_block_and_stride(void) {
     size_t y;
     fill_motion_plane(plane, 12U, 12U, 16U);
     memset(prediction, 0xa5, sizeof(prediction));
-    assert(cavs_interpolate_luma_block_eighth(
+    TEST_CHECK(cavs_interpolate_luma_block_eighth(
                plane, 12U, 12U, 16U, 2U, 2U, 8U, 8U, 8, 8,
                prediction, 10U) == CAVS_OK);
     for (y = 0U; y < 8U; ++y) {
         for (x = 0U; x < 8U; ++x)
-            assert(prediction[y * 10U + x] ==
+            TEST_CHECK(prediction[y * 10U + x] ==
                    plane[(y + 3U) * 16U + x + 3U]);
-        assert(prediction[y * 10U + 8U] == 0xa5U);
-        assert(prediction[y * 10U + 9U] == 0xa5U);
+        TEST_CHECK(prediction[y * 10U + 8U] == 0xa5U);
+        TEST_CHECK(prediction[y * 10U + 9U] == 0xa5U);
     }
 }
 
@@ -734,18 +734,18 @@ static void test_luma_eighth_negative_and_edges(void) {
     uint8_t plane[10U * 10U];
     uint8_t prediction[1];
     fill_luma_pattern(plane, 10U, 10U, 10U);
-    assert(cavs_interpolate_luma_block_eighth(
+    TEST_CHECK(cavs_interpolate_luma_block_eighth(
                plane, 10U, 10U, 10U, 0U, 0U, 1U, 1U, -1, -1,
                prediction, 1U) == CAVS_OK);
-    assert(prediction[0] == 14U);
-    assert(cavs_interpolate_luma_block_eighth(
+    TEST_CHECK(prediction[0] == 14U);
+    TEST_CHECK(cavs_interpolate_luma_block_eighth(
                plane, 10U, 10U, 10U, 0U, 0U, 1U, 1U,
                INT32_MIN, INT32_MIN, prediction, 1U) == CAVS_OK);
-    assert(prediction[0] == plane[0]);
-    assert(cavs_interpolate_luma_block_eighth(
+    TEST_CHECK(prediction[0] == plane[0]);
+    TEST_CHECK(cavs_interpolate_luma_block_eighth(
                plane, 10U, 10U, 10U, 9U, 9U, 1U, 1U,
                INT32_MAX, INT32_MAX, prediction, 1U) == CAVS_OK);
-    assert(prediction[0] == plane[9U * 10U + 9U]);
+    TEST_CHECK(prediction[0] == plane[9U * 10U + 9U]);
 }
 
 static void test_luma_eighth_in_place_and_invalid(void) {
@@ -755,19 +755,19 @@ static void test_luma_eighth_in_place_and_invalid(void) {
     uint8_t unchanged[16U * 16U];
     fill_luma_pattern(plane, 16U, 16U, 16U);
     memcpy(original, plane, sizeof(plane));
-    assert(cavs_interpolate_luma_block_eighth(
+    TEST_CHECK(cavs_interpolate_luma_block_eighth(
                original, 16U, 16U, 16U, 0U, 0U, 16U, 16U, 3, 5,
                expected, 16U) == CAVS_OK);
-    assert(cavs_interpolate_luma_block_eighth(
+    TEST_CHECK(cavs_interpolate_luma_block_eighth(
                plane, 16U, 16U, 16U, 0U, 0U, 16U, 16U, 3, 5,
                plane, 16U) == CAVS_OK);
-    assert(memcmp(plane, expected, sizeof(plane)) == 0);
+    TEST_CHECK(memcmp(plane, expected, sizeof(plane)) == 0);
     memcpy(unchanged, plane, sizeof(plane));
-    assert(cavs_interpolate_luma_block_eighth(
+    TEST_CHECK(cavs_interpolate_luma_block_eighth(
                plane, 16U, 16U, 16U, 0U, 0U, 0U, 16U, 0, 0,
                plane, 16U) == CAVS_ERR_INVALID_ARGUMENT);
-    assert(memcmp(plane, unchanged, sizeof(plane)) == 0);
-    assert(cavs_interpolate_luma_block_eighth(
+    TEST_CHECK(memcmp(plane, unchanged, sizeof(plane)) == 0);
+    TEST_CHECK(cavs_interpolate_luma_block_eighth(
                NULL, 16U, 16U, 16U, 0U, 0U, 1U, 1U, 0, 0,
                plane, 16U) == CAVS_ERR_INVALID_ARGUMENT);
 }

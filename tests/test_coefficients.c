@@ -5,7 +5,7 @@
  * GB/T 20090.2-2013 Annex D basic-entropy coefficient tests.
  */
 #include "coefficients.h"
-#include <assert.h>
+#include "test.h"
 #include <limits.h>
 #include <stdint.h>
 #include <string.h>
@@ -27,7 +27,7 @@ typedef struct table_vector {
 static void put_bit(bit_writer *writer, uint32_t bit) {
     size_t byte = writer->bit_pos / 8U;
     unsigned shift = 7U - (unsigned)(writer->bit_pos % 8U);
-    assert(byte < sizeof(writer->data));
+    TEST_CHECK(byte < sizeof(writer->data));
     if (bit != 0U) writer->data[byte] |= (uint8_t)(1U << shift);
     ++writer->bit_pos;
 }
@@ -150,13 +150,13 @@ static void test_normative_table_samples(void) {
     for (index = 0U; index < sizeof(vectors) / sizeof(vectors[0]); ++index) {
         uint32_t code, run, level;
         unsigned count;
-        assert(cavs_test_basic_vlc_info(vectors[index].kind,
+        TEST_CHECK(cavs_test_basic_vlc_info(vectors[index].kind,
                     vectors[index].table_index, vectors[index].entry_index,
                     &code, &run, &level, &count));
-        assert(code == vectors[index].code);
-        assert(run == vectors[index].run);
-        assert(level == vectors[index].level);
-        assert(count > vectors[index].entry_index);
+        TEST_CHECK(code == vectors[index].code);
+        TEST_CHECK(run == vectors[index].run);
+        TEST_CHECK(level == vectors[index].level);
+        TEST_CHECK(count > vectors[index].entry_index);
     }
 }
 
@@ -172,7 +172,7 @@ static void decode_table_entry(cavs_basic_block_kind kind,
     unsigned parsed_index = table_index == 0U ? 0U : 1U;
     memset(&writer, 0, sizeof(writer));
     put_bits(&writer, 5U, 3U);
-    assert(cavs_test_basic_vlc_info(kind, table_index, entry_index,
+    TEST_CHECK(cavs_test_basic_vlc_info(kind, table_index, entry_index,
                                    &code, &run, &level, &count));
     if (table_index != 0U) put_seed(&writer, kind, table_index);
     put_ue_k(&writer, code + (negative != 0), table_order(kind, table_index));
@@ -181,13 +181,13 @@ static void decode_table_entry(cavs_basic_block_kind kind,
     final_table = selected_table(kind, maximum);
     put_ue_k(&writer, table_eob(kind, final_table),
              table_order(kind, final_table));
-    assert(cavs_decode_basic_coefficients_8x8(writer.data, writer.bit_pos, 3U,
+    TEST_CHECK(cavs_decode_basic_coefficients_8x8(writer.data, writer.bit_pos, 3U,
                                               kind, &parsed) == CAVS_OK);
-    assert(parsed.count == parsed_index + 1U);
-    assert(parsed.run[parsed_index] == run);
-    assert(parsed.level[parsed_index] ==
+    TEST_CHECK(parsed.count == parsed_index + 1U);
+    TEST_CHECK(parsed.run[parsed_index] == run);
+    TEST_CHECK(parsed.level[parsed_index] ==
            (negative != 0 ? -(int32_t)level : (int32_t)level));
-    assert(parsed.end_bit_offset == writer.bit_pos);
+    TEST_CHECK(parsed.end_bit_offset == writer.bit_pos);
 }
 
 static void test_every_vlc_entry_and_eob(void) {
@@ -199,7 +199,7 @@ static void test_every_vlc_entry_and_eob(void) {
             uint32_t code, run, level;
             unsigned entry_index;
             unsigned count;
-            assert(cavs_test_basic_vlc_info(kind, table_index, 0U,
+            TEST_CHECK(cavs_test_basic_vlc_info(kind, table_index, 0U,
                                            &code, &run, &level, &count));
             for (entry_index = 0U; entry_index < count; ++entry_index) {
                 decode_table_entry(kind, table_index, entry_index, 0);
@@ -212,9 +212,9 @@ static void test_every_vlc_entry_and_eob(void) {
                 put_seed(&writer, kind, table_index);
                 put_ue_k(&writer, table_eob(kind, table_index),
                          table_order(kind, table_index));
-                assert(cavs_decode_basic_coefficients_8x8(
+                TEST_CHECK(cavs_decode_basic_coefficients_8x8(
                            writer.data, writer.bit_pos, 0U, kind, &parsed) == CAVS_OK);
-                assert(parsed.count == 1U);
+                TEST_CHECK(parsed.count == 1U);
             }
         }
     }
@@ -227,26 +227,26 @@ static void test_escape_and_reverse_run(void) {
     put_ue_k(&writer, 0U, 2U);  /* (run 0, level 1), then VLC1_Intra. */
     put_ue_k(&writer, 17U, 2U); /* (run 1, level 2), then VLC2_Intra. */
     put_ue_k(&writer, 8U, 2U);
-    assert(cavs_decode_basic_coefficients_8x8(writer.data, writer.bit_pos, 0U,
+    TEST_CHECK(cavs_decode_basic_coefficients_8x8(writer.data, writer.bit_pos, 0U,
                CAVS_BASIC_INTRA_LUMA, &parsed) == CAVS_OK);
-    assert(parsed.count == 2U && parsed.scan_coefficients[1] == 2);
-    assert(parsed.scan_coefficients[2] == 1);
+    TEST_CHECK(parsed.count == 2U && parsed.scan_coefficients[1] == 2);
+    TEST_CHECK(parsed.scan_coefficients[2] == 1);
 
     memset(&writer, 0, sizeof(writer));
     put_ue_k(&writer, 59U, 2U);
     put_ue_k(&writer, 2U, 1U);
     put_ue_k(&writer, 6U, 2U);
-    assert(cavs_decode_basic_coefficients_8x8(writer.data, writer.bit_pos, 0U,
+    TEST_CHECK(cavs_decode_basic_coefficients_8x8(writer.data, writer.bit_pos, 0U,
                CAVS_BASIC_INTRA_LUMA, &parsed) == CAVS_OK);
-    assert(parsed.run[0] == 0U && parsed.level[0] == -6);
+    TEST_CHECK(parsed.run[0] == 0U && parsed.level[0] == -6);
 
     memset(&writer, 0, sizeof(writer));
     put_ue_k(&writer, 60U, 2U);
     put_ue_k(&writer, 0U, 0U);
     put_ue_k(&writer, 0U, 0U);
-    assert(cavs_decode_basic_coefficients_8x8(writer.data, writer.bit_pos, 0U,
+    TEST_CHECK(cavs_decode_basic_coefficients_8x8(writer.data, writer.bit_pos, 0U,
                CAVS_BASIC_CHROMA, &parsed) == CAVS_OK);
-    assert(parsed.level[0] == 5);
+    TEST_CHECK(parsed.level[0] == 5);
 }
 
 static void test_boundaries_and_errors(void) {
@@ -257,19 +257,19 @@ static void test_boundaries_and_errors(void) {
     put_ue_k(&writer, 186U, 2U); /* Positive escape with run 63. */
     put_ue_k(&writer, 0U, 1U);
     put_ue_k(&writer, 8U, 2U);
-    assert(cavs_decode_basic_coefficients_8x8(writer.data, writer.bit_pos, 0U,
+    TEST_CHECK(cavs_decode_basic_coefficients_8x8(writer.data, writer.bit_pos, 0U,
                CAVS_BASIC_INTRA_LUMA, &parsed) == CAVS_OK);
-    assert(parsed.count == 1U && parsed.scan_coefficients[63] == 1);
+    TEST_CHECK(parsed.count == 1U && parsed.scan_coefficients[63] == 1);
 
     put_ue_k(&writer, 0U, 2U);
-    assert(cavs_decode_basic_coefficients_8x8(writer.data, writer.bit_pos, 0U,
+    TEST_CHECK(cavs_decode_basic_coefficients_8x8(writer.data, writer.bit_pos, 0U,
                CAVS_BASIC_INTRA_LUMA, &parsed) == CAVS_OK);
 
     memset(&writer, 0, sizeof(writer));
     put_ue_k(&writer, 186U, 2U);
     put_ue_k(&writer, 0U, 1U);
     put_ue_k(&writer, 0U, 2U);
-    assert(cavs_decode_basic_coefficients_8x8(writer.data, writer.bit_pos, 0U,
+    TEST_CHECK(cavs_decode_basic_coefficients_8x8(writer.data, writer.bit_pos, 0U,
                CAVS_BASIC_INTRA_LUMA, &parsed) == CAVS_ERR_CORRUPT_BITSTREAM);
 
     memset(&writer, 0, sizeof(writer));
@@ -277,23 +277,23 @@ static void test_boundaries_and_errors(void) {
     put_ue_k(&writer, (uint32_t)INT32_MAX, 1U);
     memset(&unchanged, 0xa5, sizeof(unchanged));
     parsed = unchanged;
-    assert(cavs_decode_basic_coefficients_8x8(writer.data, writer.bit_pos, 0U,
+    TEST_CHECK(cavs_decode_basic_coefficients_8x8(writer.data, writer.bit_pos, 0U,
                CAVS_BASIC_INTRA_LUMA, &parsed) == CAVS_ERR_CORRUPT_BITSTREAM);
-    assert(memcmp(&parsed, &unchanged, sizeof(parsed)) == 0);
+    TEST_CHECK(memcmp(&parsed, &unchanged, sizeof(parsed)) == 0);
 
     memset(&writer, 0, sizeof(writer));
     put_ue_k(&writer, 255U, 2U);
     put_ue_k(&writer, 0U, 1U);
-    assert(cavs_decode_basic_coefficients_8x8(writer.data, writer.bit_pos, 0U,
+    TEST_CHECK(cavs_decode_basic_coefficients_8x8(writer.data, writer.bit_pos, 0U,
                CAVS_BASIC_INTRA_LUMA, &parsed) == CAVS_ERR_CORRUPT_BITSTREAM);
-    assert(cavs_decode_basic_coefficients_8x8(writer.data, writer.bit_pos - 1U, 0U,
+    TEST_CHECK(cavs_decode_basic_coefficients_8x8(writer.data, writer.bit_pos - 1U, 0U,
                CAVS_BASIC_INTRA_LUMA, &parsed) == CAVS_ERR_CORRUPT_BITSTREAM);
-    assert(cavs_decode_basic_coefficients_8x8(NULL, 1U, 0U,
+    TEST_CHECK(cavs_decode_basic_coefficients_8x8(NULL, 1U, 0U,
                CAVS_BASIC_INTRA_LUMA, &parsed) == CAVS_ERR_INVALID_ARGUMENT);
-    assert(cavs_decode_basic_coefficients_8x8(writer.data, writer.bit_pos,
+    TEST_CHECK(cavs_decode_basic_coefficients_8x8(writer.data, writer.bit_pos,
                writer.bit_pos + 1U, CAVS_BASIC_INTRA_LUMA,
                &parsed) == CAVS_ERR_INVALID_ARGUMENT);
-    assert(cavs_decode_basic_coefficients_8x8(writer.data, writer.bit_pos, 0U,
+    TEST_CHECK(cavs_decode_basic_coefficients_8x8(writer.data, writer.bit_pos, 0U,
                (cavs_basic_block_kind)3, &parsed) == CAVS_ERR_INVALID_ARGUMENT);
 }
 

@@ -5,7 +5,7 @@
  * Independent syntax vectors for start codes and common sequence headers.
  */
 #include "syntax.h"
-#include <assert.h>
+#include "test.h"
 #include <string.h>
 
 typedef struct test_bitwriter {
@@ -69,7 +69,7 @@ static void make_sequence_header(uint8_t profile, test_bitwriter *writer) {
     write_bits(writer, 1U, 1U);
     write_bits(writer, 4U, 18U);
     write_bits(writer, 0U, 3U);
-    assert(writer->position == 14U * 8U);
+    TEST_CHECK(writer->position == 14U * 8U);
 }
 
 /* Builds a progressive baseline I-picture header with filtering disabled. */
@@ -205,17 +205,17 @@ static void make_broadcast_b_picture(test_bitwriter *writer) {
 
 /* Tests every explicit and ranged start-code classification. */
 static void test_start_codes(void) {
-    assert(cavs_classify_start_code(0U) == CAVS_UNIT_SLICE);
-    assert(cavs_classify_start_code(UINT8_C(0xaf)) == CAVS_UNIT_SLICE);
-    assert(cavs_classify_start_code(UINT8_C(0xb0)) == CAVS_UNIT_SEQUENCE_HEADER);
-    assert(cavs_classify_start_code(UINT8_C(0xb1)) == CAVS_UNIT_SEQUENCE_END);
-    assert(cavs_classify_start_code(UINT8_C(0xb2)) == CAVS_UNIT_USER_DATA);
-    assert(cavs_classify_start_code(UINT8_C(0xb3)) == CAVS_UNIT_I_PICTURE);
-    assert(cavs_classify_start_code(UINT8_C(0xb5)) == CAVS_UNIT_EXTENSION);
-    assert(cavs_classify_start_code(UINT8_C(0xb6)) == CAVS_UNIT_PB_PICTURE);
-    assert(cavs_classify_start_code(UINT8_C(0xb7)) == CAVS_UNIT_VIDEO_EDIT);
-    assert(cavs_classify_start_code(UINT8_C(0xb8)) == CAVS_UNIT_RESERVED);
-    assert(cavs_classify_start_code(UINT8_C(0xff)) == CAVS_UNIT_SYSTEM);
+    TEST_CHECK(cavs_classify_start_code(0U) == CAVS_UNIT_SLICE);
+    TEST_CHECK(cavs_classify_start_code(UINT8_C(0xaf)) == CAVS_UNIT_SLICE);
+    TEST_CHECK(cavs_classify_start_code(UINT8_C(0xb0)) == CAVS_UNIT_SEQUENCE_HEADER);
+    TEST_CHECK(cavs_classify_start_code(UINT8_C(0xb1)) == CAVS_UNIT_SEQUENCE_END);
+    TEST_CHECK(cavs_classify_start_code(UINT8_C(0xb2)) == CAVS_UNIT_USER_DATA);
+    TEST_CHECK(cavs_classify_start_code(UINT8_C(0xb3)) == CAVS_UNIT_I_PICTURE);
+    TEST_CHECK(cavs_classify_start_code(UINT8_C(0xb5)) == CAVS_UNIT_EXTENSION);
+    TEST_CHECK(cavs_classify_start_code(UINT8_C(0xb6)) == CAVS_UNIT_PB_PICTURE);
+    TEST_CHECK(cavs_classify_start_code(UINT8_C(0xb7)) == CAVS_UNIT_VIDEO_EDIT);
+    TEST_CHECK(cavs_classify_start_code(UINT8_C(0xb8)) == CAVS_UNIT_RESERVED);
+    TEST_CHECK(cavs_classify_start_code(UINT8_C(0xff)) == CAVS_UNIT_SYSTEM);
 }
 
 /* Verifies supported profiles and the public interpretation of common fields. */
@@ -223,23 +223,23 @@ static void test_sequence_headers(void) {
     test_bitwriter writer;
     cavs_sequence_info sequence;
     make_sequence_header(UINT8_C(0x20), &writer);
-    assert(cavs_parse_sequence_header(writer.data, sizeof(writer.data), &sequence) == CAVS_OK);
-    assert(sequence.profile_id == UINT8_C(0x20));
-    assert(sequence.display_width == 1920U && sequence.display_height == 1080U);
-    assert(sequence.format == CAVS_YUV420P8);
-    assert(sequence.bit_rate == UINT64_C(210115200));
-    assert(sequence.bbv_buffer_size_bits == UINT64_C(65536));
+    TEST_CHECK(cavs_parse_sequence_header(writer.data, sizeof(writer.data), &sequence) == CAVS_OK);
+    TEST_CHECK(sequence.profile_id == UINT8_C(0x20));
+    TEST_CHECK(sequence.display_width == 1920U && sequence.display_height == 1080U);
+    TEST_CHECK(sequence.format == CAVS_YUV420P8);
+    TEST_CHECK(sequence.bit_rate == UINT64_C(210115200));
+    TEST_CHECK(sequence.bbv_buffer_size_bits == UINT64_C(65536));
     make_sequence_header(UINT8_C(0x48), &writer);
-    assert(cavs_parse_sequence_header(writer.data, sizeof(writer.data), &sequence) == CAVS_OK);
-    assert(cavs_parse_sequence_header(writer.data, 1U, &sequence) == CAVS_ERR_CORRUPT_BITSTREAM);
+    TEST_CHECK(cavs_parse_sequence_header(writer.data, sizeof(writer.data), &sequence) == CAVS_OK);
+    TEST_CHECK(cavs_parse_sequence_header(writer.data, 1U, &sequence) == CAVS_ERR_CORRUPT_BITSTREAM);
     writer.data[1] = UINT8_C(0xff);
-    assert(cavs_parse_sequence_header(writer.data, sizeof(writer.data), &sequence) == CAVS_ERR_UNSUPPORTED_LEVEL);
+    TEST_CHECK(cavs_parse_sequence_header(writer.data, sizeof(writer.data), &sequence) == CAVS_ERR_UNSUPPORTED_LEVEL);
     make_sequence_header(UINT8_C(0x20), &writer);
     writer.data[9] &= UINT8_C(0xf7);
-    assert(cavs_parse_sequence_header(writer.data, sizeof(writer.data), &sequence) == CAVS_ERR_CORRUPT_BITSTREAM);
+    TEST_CHECK(cavs_parse_sequence_header(writer.data, sizeof(writer.data), &sequence) == CAVS_ERR_CORRUPT_BITSTREAM);
     make_sequence_header(UINT8_C(0x48), &writer);
     writer.data[0] = UINT8_C(0x24);
-    assert(cavs_parse_sequence_header(writer.data, sizeof(writer.data), &sequence) == CAVS_ERR_UNSUPPORTED_PROFILE);
+    TEST_CHECK(cavs_parse_sequence_header(writer.data, sizeof(writer.data), &sequence) == CAVS_ERR_UNSUPPORTED_PROFILE);
 }
 
 /* Covers profile-specific I-picture branches and normative value ranges. */
@@ -252,40 +252,40 @@ static void test_i_picture_headers(void) {
     sequence.profile_id = UINT8_C(0x20);
     sequence.progressive_sequence = 1U;
     make_baseline_i_picture(&writer);
-    assert(cavs_parse_i_picture_header(writer.data, writer.position,
+    TEST_CHECK(cavs_parse_i_picture_header(writer.data, writer.position,
                                        &sequence, &picture) == CAVS_OK);
-    assert(picture.bbv_delay == UINT32_C(0xffff));
-    assert(picture.picture_distance == 7U && picture.picture_qp == 32U);
-    assert(picture.progressive_frame == 1U && picture.picture_structure == 1U);
-    assert(picture.loop_filter_disable == 1U);
-    assert(cavs_parse_i_picture_header(writer.data, writer.position - 1U,
+    TEST_CHECK(picture.bbv_delay == UINT32_C(0xffff));
+    TEST_CHECK(picture.picture_distance == 7U && picture.picture_qp == 32U);
+    TEST_CHECK(picture.progressive_frame == 1U && picture.picture_structure == 1U);
+    TEST_CHECK(picture.loop_filter_disable == 1U);
+    TEST_CHECK(cavs_parse_i_picture_header(writer.data, writer.position - 1U,
                                        &sequence, &picture) == CAVS_ERR_CORRUPT_BITSTREAM);
 
     sequence.progressive_sequence = 0U;
     sequence.low_delay = 1U;
     make_interlaced_i_picture(&writer);
-    assert(cavs_parse_i_picture_header(writer.data, writer.position,
+    TEST_CHECK(cavs_parse_i_picture_header(writer.data, writer.position,
                                        &sequence, &picture) == CAVS_OK);
-    assert(picture.has_time_code == 1U && picture.bbv_check_times == 3U);
-    assert(picture.picture_structure == 0U && picture.skip_mode_flag == 1U);
-    assert(picture.alpha_c_offset == -8 && picture.beta_offset == 8);
+    TEST_CHECK(picture.has_time_code == 1U && picture.bbv_check_times == 3U);
+    TEST_CHECK(picture.picture_structure == 0U && picture.skip_mode_flag == 1U);
+    TEST_CHECK(picture.alpha_c_offset == -8 && picture.beta_offset == 8);
 
     memset(&sequence, 0, sizeof(sequence));
     sequence.profile_id = UINT8_C(0x48);
     sequence.progressive_sequence = 1U;
     make_broadcast_i_picture(&writer, 1U);
-    assert(cavs_parse_i_picture_header(writer.data, writer.position,
+    TEST_CHECK(cavs_parse_i_picture_header(writer.data, writer.position,
                                        &sequence, &picture) == CAVS_OK);
-    assert(picture.bbv_delay == ((UINT32_C(0x1234) << 7) | UINT32_C(0x55)));
-    assert(picture.weighting_quant_flag == 1U);
-    assert(picture.chroma_quant_parameter_delta_cb == -16);
-    assert(picture.chroma_quant_parameter_delta_cr == 16);
-    assert(picture.weighting_quant_parameter_delta1[0] == -128);
-    assert(picture.weighting_quant_parameter_delta1[5] == 127);
-    assert(picture.advanced_entropy_enabled == 1U);
+    TEST_CHECK(picture.bbv_delay == ((UINT32_C(0x1234) << 7) | UINT32_C(0x55)));
+    TEST_CHECK(picture.weighting_quant_flag == 1U);
+    TEST_CHECK(picture.chroma_quant_parameter_delta_cb == -16);
+    TEST_CHECK(picture.chroma_quant_parameter_delta_cr == 16);
+    TEST_CHECK(picture.weighting_quant_parameter_delta1[0] == -128);
+    TEST_CHECK(picture.weighting_quant_parameter_delta1[5] == 127);
+    TEST_CHECK(picture.advanced_entropy_enabled == 1U);
 
     make_broadcast_i_picture(&writer, 3U);
-    assert(cavs_parse_i_picture_header(writer.data, writer.position,
+    TEST_CHECK(cavs_parse_i_picture_header(writer.data, writer.position,
                                        &sequence, &picture) == CAVS_ERR_CORRUPT_BITSTREAM);
 }
 
@@ -299,35 +299,35 @@ static void test_pb_picture_headers(void) {
     sequence.profile_id = UINT8_C(0x20);
     sequence.progressive_sequence = 1U;
     make_baseline_p_picture(&writer, 1U);
-    assert(cavs_parse_pb_picture_header(writer.data, writer.position,
+    TEST_CHECK(cavs_parse_pb_picture_header(writer.data, writer.position,
                                         &sequence, &picture) == CAVS_OK);
-    assert(picture.picture_coding_type == 1U && picture.picture_qp == 22U);
-    assert(picture.picture_reference_flag == 0U && picture.skip_mode_flag == 1U);
-    assert(cavs_parse_pb_picture_header(writer.data, writer.position - 1U,
+    TEST_CHECK(picture.picture_coding_type == 1U && picture.picture_qp == 22U);
+    TEST_CHECK(picture.picture_reference_flag == 0U && picture.skip_mode_flag == 1U);
+    TEST_CHECK(cavs_parse_pb_picture_header(writer.data, writer.position - 1U,
                                         &sequence, &picture) == CAVS_ERR_CORRUPT_BITSTREAM);
     make_baseline_p_picture(&writer, 0U);
-    assert(cavs_parse_pb_picture_header(writer.data, writer.position,
+    TEST_CHECK(cavs_parse_pb_picture_header(writer.data, writer.position,
                                         &sequence, &picture) == CAVS_ERR_CORRUPT_BITSTREAM);
 
     sequence.progressive_sequence = 0U;
     make_baseline_b_field_picture(&writer);
-    assert(cavs_parse_pb_picture_header(writer.data, writer.position,
+    TEST_CHECK(cavs_parse_pb_picture_header(writer.data, writer.position,
                                         &sequence, &picture) == CAVS_OK);
-    assert(picture.picture_coding_type == 2U && picture.picture_structure == 0U);
-    assert(picture.advanced_prediction_mode_disable == 1U);
-    assert(picture.picture_reference_flag == 0U);
+    TEST_CHECK(picture.picture_coding_type == 2U && picture.picture_structure == 0U);
+    TEST_CHECK(picture.advanced_prediction_mode_disable == 1U);
+    TEST_CHECK(picture.picture_reference_flag == 0U);
 
     memset(&sequence, 0, sizeof(sequence));
     sequence.profile_id = UINT8_C(0x48);
     sequence.progressive_sequence = 1U;
     make_broadcast_b_picture(&writer);
-    assert(cavs_parse_pb_picture_header(writer.data, writer.position,
+    TEST_CHECK(cavs_parse_pb_picture_header(writer.data, writer.position,
                                         &sequence, &picture) == CAVS_OK);
-    assert(picture.bbv_delay == ((UINT32_C(0x4321) << 7) | 3U));
-    assert(picture.picture_coding_type == 2U && picture.picture_reference_flag == 1U);
-    assert(picture.pb_field_enhanced_flag == 1U);
-    assert(picture.weighting_quant_flag == 0U);
-    assert(picture.advanced_entropy_enabled == 1U);
+    TEST_CHECK(picture.bbv_delay == ((UINT32_C(0x4321) << 7) | 3U));
+    TEST_CHECK(picture.picture_coding_type == 2U && picture.picture_reference_flag == 1U);
+    TEST_CHECK(picture.pb_field_enhanced_flag == 1U);
+    TEST_CHECK(picture.weighting_quant_flag == 0U);
+    TEST_CHECK(picture.advanced_entropy_enabled == 1U);
 }
 
 /* Covers target-profile QP, weighting, vertical extension, and alignment. */
@@ -351,10 +351,10 @@ static void test_slice_headers(void) {
     context.picture_qp = 20U;
     write_bits(&writer, 1U, 1U);
     write_bits(&writer, 27U, 6U);
-    assert(cavs_parse_slice_header(UINT8_C(0x12), writer.data,
+    TEST_CHECK(cavs_parse_slice_header(UINT8_C(0x12), writer.data,
                                    writer.position, &context, &slice) == CAVS_OK);
-    assert(slice.macroblock_row == 18U && slice.fixed_slice_qp == 1U);
-    assert(slice.slice_qp == 27U && slice.header_bits == 7U);
+    TEST_CHECK(slice.macroblock_row == 18U && slice.fixed_slice_qp == 1U);
+    TEST_CHECK(slice.slice_qp == 27U && slice.header_bits == 7U);
 
     memset(&writer, 0, sizeof(writer));
     context.vertical_size = 3008U;
@@ -362,10 +362,10 @@ static void test_slice_headers(void) {
     context.fixed_picture_qp = 1U;
     context.picture_qp = 19U;
     write_bits(&writer, 1U, 3U);
-    assert(cavs_parse_slice_header(0U, writer.data, writer.position,
+    TEST_CHECK(cavs_parse_slice_header(0U, writer.data, writer.position,
                                    &context, &slice) == CAVS_OK);
-    assert(slice.macroblock_row == 128U && slice.slice_qp == 19U);
-    assert(slice.header_bits == 3U);
+    TEST_CHECK(slice.macroblock_row == 128U && slice.slice_qp == 19U);
+    TEST_CHECK(slice.header_bits == 3U);
 
     memset(&writer, 0, sizeof(writer));
     context.profile_id = UINT8_C(0x48);
@@ -390,13 +390,13 @@ static void test_slice_headers(void) {
     }
     write_bits(&writer, 1U, 1U);
     while ((writer.position & 7U) != 0U) write_bits(&writer, 1U, 1U);
-    assert(cavs_parse_slice_header(3U, writer.data, writer.position,
+    TEST_CHECK(cavs_parse_slice_header(3U, writer.data, writer.position,
                                    &context, &slice) == CAVS_OK);
-    assert(slice.macroblock_row == 3U && slice.slice_qp == 22U);
-    assert(slice.slice_weighting_flag == 1U && slice.number_of_references == 2U);
-    assert(slice.luma_scale[0] == 32U && slice.luma_shift[0] == -3);
-    assert(slice.chroma_scale[1] == 52U && slice.chroma_shift[1] == 9);
-    assert(slice.mb_weighting_flag == 1U && slice.header_bits == writer.position);
+    TEST_CHECK(slice.macroblock_row == 3U && slice.slice_qp == 22U);
+    TEST_CHECK(slice.slice_weighting_flag == 1U && slice.number_of_references == 2U);
+    TEST_CHECK(slice.luma_scale[0] == 32U && slice.luma_shift[0] == -3);
+    TEST_CHECK(slice.chroma_scale[1] == 52U && slice.chroma_shift[1] == 9);
+    TEST_CHECK(slice.mb_weighting_flag == 1U && slice.header_bits == writer.position);
 }
 
 /* Entry point called by the shared unit-test executable. */

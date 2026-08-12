@@ -7,7 +7,7 @@
 #include "bitreader.h"
 #include "pseudo_start_code.h"
 #include "safe.h"
-#include <assert.h>
+#include "test.h"
 #include <limits.h>
 #include <stdint.h>
 
@@ -25,11 +25,11 @@ static void test_fixed_bits(void) {
     cavs_bitreader br;
     uint32_t value;
     cavs_br_init(&br, data, sizeof(data));
-    assert(cavs_br_read(&br, 4, &value) && value == 11U);
-    assert(cavs_br_read(&br, 4, &value) && value == 3U);
-    assert(cavs_br_init_bits(&br, data + 1, 1U));
-    assert(cavs_br_read(&br, 1, &value) && value == 1U);
-    assert(!cavs_br_read(&br, 1, &value));
+    TEST_CHECK(cavs_br_read(&br, 4, &value) && value == 11U);
+    TEST_CHECK(cavs_br_read(&br, 4, &value) && value == 3U);
+    TEST_CHECK(cavs_br_init_bits(&br, data + 1, 1U));
+    TEST_CHECK(cavs_br_read(&br, 1, &value) && value == 1U);
+    TEST_CHECK(!cavs_br_read(&br, 1, &value));
 }
 
 /* Checks independently transcribed examples from Tables 42 and 43. */
@@ -40,20 +40,20 @@ static void test_exponential_golomb(void) {
     uint32_t value;
     int32_t signed_value;
     cavs_br_init(&br, order_zero, sizeof(order_zero));
-    assert(cavs_br_read_ue(&br, &value) && value == 0U);
-    assert(cavs_br_read_ue(&br, &value) && value == 1U);
-    assert(cavs_br_read_ue(&br, &value) && value == 2U);
-    assert(cavs_br_read_ue(&br, &value) && value == 3U);
+    TEST_CHECK(cavs_br_read_ue(&br, &value) && value == 0U);
+    TEST_CHECK(cavs_br_read_ue(&br, &value) && value == 1U);
+    TEST_CHECK(cavs_br_read_ue(&br, &value) && value == 2U);
+    TEST_CHECK(cavs_br_read_ue(&br, &value) && value == 3U);
     cavs_br_init(&br, order_one, sizeof(order_one));
-    assert(cavs_br_read_ue_k(&br, 1U, &value) && value == 1U);
+    TEST_CHECK(cavs_br_read_ue_k(&br, 1U, &value) && value == 1U);
     cavs_br_init(&br, order_zero, sizeof(order_zero));
-    assert(cavs_br_read_se(&br, &signed_value) && signed_value == 0);
-    assert(cavs_br_read_se(&br, &signed_value) && signed_value == 1);
-    assert(cavs_br_read_se(&br, &signed_value) && signed_value == -1);
+    TEST_CHECK(cavs_br_read_se(&br, &signed_value) && signed_value == 0);
+    TEST_CHECK(cavs_br_read_se(&br, &signed_value) && signed_value == 1);
+    TEST_CHECK(cavs_br_read_se(&br, &signed_value) && signed_value == -1);
     cavs_br_init_bits(&br, order_zero, 2U);
-    assert(cavs_br_read(&br, 1U, &value) && value == 1U);
-    assert(!cavs_br_read_ue(&br, &value));
-    assert(br.bit_pos == 1U);
+    TEST_CHECK(cavs_br_read(&br, 1U, &value) && value == 1U);
+    TEST_CHECK(!cavs_br_read_ue(&br, &value));
+    TEST_CHECK(br.bit_pos == 1U);
 }
 
 /* Verifies Annex A removal, repacking, and output-capacity rejection. */
@@ -61,23 +61,23 @@ static void test_pseudo_start_code(void) {
     static const uint8_t encoded[] = { 0x00, 0x00, 0x02, 0xc0 };
     uint8_t decoded[4];
     size_t output_bits;
-    assert(cavs_remove_pseudo_start_codes(encoded, sizeof(encoded), decoded,
+    TEST_CHECK(cavs_remove_pseudo_start_codes(encoded, sizeof(encoded), decoded,
                                           sizeof(decoded), &output_bits));
-    assert(output_bits == 30U);
-    assert(decoded[0] == 0U && decoded[1] == 0U && decoded[2] == 3U && decoded[3] == 0U);
-    assert(!cavs_remove_pseudo_start_codes(encoded, sizeof(encoded), decoded, 3U, &output_bits));
+    TEST_CHECK(output_bits == 30U);
+    TEST_CHECK(decoded[0] == 0U && decoded[1] == 0U && decoded[2] == 3U && decoded[3] == 0U);
+    TEST_CHECK(!cavs_remove_pseudo_start_codes(encoded, sizeof(encoded), decoded, 3U, &output_bits));
 }
 
 /* Covers arithmetic overflow and alignment-independent byte loads. */
 static void test_safe_helpers(void) {
     static const uint8_t bytes[] = { 0xff, 0x12, 0x34, 0x56, 0x78 };
     size_t value;
-    assert(cavs_size_add(2U, 3U, &value) && value == 5U);
-    assert(!cavs_size_add(SIZE_MAX, 1U, &value));
-    assert(cavs_size_mul(7U, 9U, &value) && value == 63U);
-    assert(!cavs_size_mul(SIZE_MAX, 2U, &value));
-    assert(cavs_load_be16(bytes + 1) == UINT16_C(0x1234));
-    assert(cavs_load_be32(bytes + 1) == UINT32_C(0x12345678));
+    TEST_CHECK(cavs_size_add(2U, 3U, &value) && value == 5U);
+    TEST_CHECK(!cavs_size_add(SIZE_MAX, 1U, &value));
+    TEST_CHECK(cavs_size_mul(7U, 9U, &value) && value == 63U);
+    TEST_CHECK(!cavs_size_mul(SIZE_MAX, 2U, &value));
+    TEST_CHECK(cavs_load_be16(bytes + 1) == UINT16_C(0x1234));
+    TEST_CHECK(cavs_load_be32(bytes + 1) == UINT32_C(0x12345678));
 }
 
 /* Runs all safety-foundation test groups. */

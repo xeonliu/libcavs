@@ -5,7 +5,7 @@
  * Public decoder API state-machine tests.
  */
 #include <cavs/cavs.h>
-#include <assert.h>
+#include "test.h"
 #include <string.h>
 
 /* Supplies one half of an intentionally invalid allocator pair. */
@@ -44,7 +44,7 @@ static void make_sequence_nal(uint8_t data[18]) {
     append_bits(data, &position, 1U, 1U);
     append_bits(data, &position, 2U, 18U);
     append_bits(data, &position, 0U, 3U);
-    assert(position == 18U * 8U);
+    TEST_CHECK(position == 18U * 8U);
 }
 
 /* Creates a progressive baseline I-picture header for decoder dispatch. */
@@ -65,7 +65,7 @@ static void make_i_picture_nal(uint8_t data[10]) {
     append_bits(data, &position, 20U, 6U);
     append_bits(data, &position, 0U, 4U);
     append_bits(data, &position, 1U, 1U);
-    assert(position == 74U);
+    TEST_CHECK(position == 74U);
 }
 
 /* Creates a progressive baseline P-picture header for decoder dispatch. */
@@ -88,7 +88,7 @@ static void make_pb_picture_nal(uint8_t data[10]) {
     append_bits(data, &position, 0U, 3U);
     append_bits(data, &position, 1U, 1U);
     append_bits(data, &position, 1U, 1U);
-    assert(position == 76U);
+    TEST_CHECK(position == 76U);
 }
 
 /* Creates one baseline I-picture slice header before its macroblock data. */
@@ -99,7 +99,7 @@ static void make_slice_nal(uint8_t data[5]) {
     data[3] = 0U;
     append_bits(data, &position, 1U, 1U);
     append_bits(data, &position, 20U, 6U);
-    assert(position == 39U);
+    TEST_CHECK(position == 39U);
 }
 
 /* Verifies argument validation, drain behavior, and reset behavior. */
@@ -119,63 +119,63 @@ int main(void) {
 
     bad_config.alloc = NULL;
     bad_config.free = dummy_free;
-    assert(cavs_decoder_create(&bad_config, &decoder) == CAVS_ERR_INVALID_ARGUMENT);
-    assert(cavs_decoder_create(NULL, &decoder) == CAVS_OK);
-    assert(cavs_decoder_receive_event(decoder, &event) == CAVS_AGAIN);
-    assert(cavs_decoder_send_nal(decoder, &packet) == CAVS_ERR_INVALID_STATE);
+    TEST_CHECK(cavs_decoder_create(&bad_config, &decoder) == CAVS_ERR_INVALID_ARGUMENT);
+    TEST_CHECK(cavs_decoder_create(NULL, &decoder) == CAVS_OK);
+    TEST_CHECK(cavs_decoder_receive_event(decoder, &event) == CAVS_AGAIN);
+    TEST_CHECK(cavs_decoder_send_nal(decoder, &packet) == CAVS_ERR_INVALID_STATE);
     make_sequence_nal(sequence_nal);
     packet.data = sequence_nal;
     packet.size = sizeof(sequence_nal);
-    assert(cavs_decoder_send_nal(decoder, &packet) == CAVS_OK);
-    assert(cavs_decoder_receive_event(decoder, &event) == CAVS_OK);
-    assert(event.type == CAVS_EVENT_SEQUENCE);
-    assert(event.sequence.profile_id == UINT8_C(0x20));
-    assert(event.sequence.display_width == 720U && event.sequence.display_height == 576U);
+    TEST_CHECK(cavs_decoder_send_nal(decoder, &packet) == CAVS_OK);
+    TEST_CHECK(cavs_decoder_receive_event(decoder, &event) == CAVS_OK);
+    TEST_CHECK(event.type == CAVS_EVENT_SEQUENCE);
+    TEST_CHECK(event.sequence.profile_id == UINT8_C(0x20));
+    TEST_CHECK(event.sequence.display_width == 720U && event.sequence.display_height == 576U);
     make_i_picture_nal(i_picture_nal);
     packet.data = i_picture_nal;
     packet.size = sizeof(i_picture_nal);
     packet.pts = 101;
     packet.dts = 99;
-    assert(cavs_decoder_send_nal(decoder, &packet) == CAVS_OK);
-    assert(cavs_decoder_receive_event(decoder, &event) == CAVS_AGAIN);
+    TEST_CHECK(cavs_decoder_send_nal(decoder, &packet) == CAVS_OK);
+    TEST_CHECK(cavs_decoder_receive_event(decoder, &event) == CAVS_AGAIN);
     make_slice_nal(slice_nal);
     packet.data = slice_nal;
     packet.size = sizeof(slice_nal);
-    assert(cavs_decoder_send_nal(decoder, &packet) == CAVS_OK);
-    assert(cavs_decoder_receive_event(decoder, &event) == CAVS_AGAIN);
+    TEST_CHECK(cavs_decoder_send_nal(decoder, &packet) == CAVS_OK);
+    TEST_CHECK(cavs_decoder_receive_event(decoder, &event) == CAVS_AGAIN);
     make_pb_picture_nal(pb_picture_nal);
     packet.data = pb_picture_nal;
     packet.size = sizeof(pb_picture_nal);
-    assert(cavs_decoder_send_nal(decoder, &packet) == CAVS_OK);
-    assert(cavs_decoder_receive_event(decoder, &event) == CAVS_AGAIN);
+    TEST_CHECK(cavs_decoder_send_nal(decoder, &packet) == CAVS_OK);
+    TEST_CHECK(cavs_decoder_receive_event(decoder, &event) == CAVS_AGAIN);
     packet.data = sequence_nal;
     packet.size = sizeof(sequence_nal);
-    assert(cavs_decoder_send_nal(decoder, &packet) == CAVS_OK);
-    assert(cavs_decoder_receive_event(decoder, &event) == CAVS_AGAIN);
+    TEST_CHECK(cavs_decoder_send_nal(decoder, &packet) == CAVS_OK);
+    TEST_CHECK(cavs_decoder_receive_event(decoder, &event) == CAVS_AGAIN);
     packet.data = user_data;
     packet.size = sizeof(user_data);
-    assert(cavs_decoder_send_nal(decoder, &packet) == CAVS_OK);
+    TEST_CHECK(cavs_decoder_send_nal(decoder, &packet) == CAVS_OK);
     packet.data = extension;
     packet.size = sizeof(extension);
-    assert(cavs_decoder_send_nal(decoder, &packet) == CAVS_AGAIN);
-    assert(cavs_decoder_receive_event(decoder, &event) == CAVS_OK);
-    assert(event.type == CAVS_EVENT_METADATA && event.size == 3U);
-    assert(memcmp(event.data, "avs", 3U) == 0);
-    assert(cavs_decoder_send_nal(decoder, &packet) == CAVS_OK);
-    assert(cavs_decoder_receive_event(decoder, &event) == CAVS_OK);
-    assert(event.type == CAVS_EVENT_RAW_EXTENSION && event.size == 2U);
-    assert(event.data[0] == UINT8_C(0x91) && event.data[1] == UINT8_C(0x27));
-    assert(cavs_decoder_receive_event(decoder, &event) == CAVS_AGAIN);
+    TEST_CHECK(cavs_decoder_send_nal(decoder, &packet) == CAVS_AGAIN);
+    TEST_CHECK(cavs_decoder_receive_event(decoder, &event) == CAVS_OK);
+    TEST_CHECK(event.type == CAVS_EVENT_METADATA && event.size == 3U);
+    TEST_CHECK(memcmp(event.data, "avs", 3U) == 0);
+    TEST_CHECK(cavs_decoder_send_nal(decoder, &packet) == CAVS_OK);
+    TEST_CHECK(cavs_decoder_receive_event(decoder, &event) == CAVS_OK);
+    TEST_CHECK(event.type == CAVS_EVENT_RAW_EXTENSION && event.size == 2U);
+    TEST_CHECK(event.data[0] == UINT8_C(0x91) && event.data[1] == UINT8_C(0x27));
+    TEST_CHECK(cavs_decoder_receive_event(decoder, &event) == CAVS_AGAIN);
     packet.data = invalid_prefix;
     packet.size = sizeof(invalid_prefix);
-    assert(cavs_decoder_send_nal(decoder, &packet) == CAVS_ERR_CORRUPT_BITSTREAM);
-    assert(cavs_decoder_flush(decoder) == CAVS_OK);
-    assert(cavs_decoder_receive_event(decoder, &event) == CAVS_OK);
-    assert(event.type == CAVS_EVENT_END);
-    assert(cavs_decoder_receive_event(decoder, &event) == CAVS_EOF);
-    assert(cavs_decoder_send_nal(decoder, &packet) == CAVS_ERR_INVALID_STATE);
-    assert(cavs_decoder_reset(decoder) == CAVS_OK);
-    assert(cavs_decoder_receive_event(decoder, &event) == CAVS_AGAIN);
+    TEST_CHECK(cavs_decoder_send_nal(decoder, &packet) == CAVS_ERR_CORRUPT_BITSTREAM);
+    TEST_CHECK(cavs_decoder_flush(decoder) == CAVS_OK);
+    TEST_CHECK(cavs_decoder_receive_event(decoder, &event) == CAVS_OK);
+    TEST_CHECK(event.type == CAVS_EVENT_END);
+    TEST_CHECK(cavs_decoder_receive_event(decoder, &event) == CAVS_EOF);
+    TEST_CHECK(cavs_decoder_send_nal(decoder, &packet) == CAVS_ERR_INVALID_STATE);
+    TEST_CHECK(cavs_decoder_reset(decoder) == CAVS_OK);
+    TEST_CHECK(cavs_decoder_receive_event(decoder, &event) == CAVS_AGAIN);
     cavs_decoder_destroy(decoder);
     return 0;
 }

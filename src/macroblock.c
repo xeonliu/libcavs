@@ -297,6 +297,46 @@ cavs_result cavs_reconstruct_baseline420_macroblock(
     return CAVS_OK;
 }
 
+cavs_result cavs_reconstruct_baseline420_block(
+    const cavs_basic_coefficients *block, uint8_t coded, uint8_t qp,
+    cavs_scan_mode_8x8 scan_mode, const uint8_t *forward,
+    const uint8_t *backward, uint8_t reconstructed[64]) {
+    int32_t predicted_quant[CAVS_BLOCK_8X8_COEFFICIENTS];
+    uint8_t weights[CAVS_BLOCK_8X8_COEFFICIENTS];
+    int32_t quant[CAVS_BLOCK_8X8_COEFFICIENTS];
+    int32_t coefficients[CAVS_BLOCK_8X8_COEFFICIENTS];
+    int16_t residual[CAVS_BLOCK_8X8_COEFFICIENTS];
+    uint8_t parsed[64];
+    cavs_result result;
+
+    if (block == NULL || forward == NULL || reconstructed == NULL ||
+        coded > 1U || qp > 63U ||
+        (scan_mode != CAVS_SCAN_8X8_FRAME &&
+         scan_mode != CAVS_SCAN_8X8_FIELD))
+        return CAVS_ERR_INVALID_ARGUMENT;
+    if (coded != 0U) {
+        if (block->count == 0U || block->count > CAVS_COEFFICIENT_COUNT_8X8)
+            return CAVS_ERR_CORRUPT_BITSTREAM;
+        memset(predicted_quant, 0, sizeof(predicted_quant));
+        memset(weights, 128, sizeof(weights));
+        result = cavs_inverse_scan_8x8(
+            block->scan_coefficients, scan_mode, quant);
+        if (result != CAVS_OK) return result;
+        result = cavs_inverse_quantize_8x8(
+            quant, predicted_quant, weights, qp, coefficients);
+        if (result != CAVS_OK) return result;
+        result = cavs_inverse_transform_8x8(coefficients, residual);
+        if (result != CAVS_OK) return result;
+    } else {
+        memset(residual, 0, sizeof(residual));
+    }
+    result = cavs_reconstruct_samples_8x8(
+        forward, backward, residual, parsed);
+    if (result != CAVS_OK) return result;
+    memcpy(reconstructed, parsed, sizeof(parsed));
+    return CAVS_OK;
+}
+
 static cavs_result resolve_intra_luma_mode(
     const cavs_baseline420_mb_header *header, unsigned index,
     const uint8_t *predicted_modes, uint8_t *mode) {
