@@ -80,7 +80,7 @@ cavs_result cavs_slice_decode(
         if (macroblock.address != cursor->macroblock_address ||
             macroblock.row != cursor->row ||
             macroblock.column != cursor->column ||
-            macroblock.end_bit_offset <= cursor->bit_offset ||
+            macroblock.end_bit_offset < cursor->bit_offset ||
             macroblock.end_bit_offset > cursor->bit_size)
             return CAVS_ERR_CORRUPT_BITSTREAM;
         result = cavs_broadcast_reconstruct_macroblock(reconstruction,

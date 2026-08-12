@@ -27,8 +27,10 @@ typedef struct cavs_slice_cursor {
  * opaque. CAVS_EOF means that the entropy module has validated the trailing
  * arithmetic padding and found no further macroblock. The callback must copy
  * its full arithmetic state before decoding and commit it only on CAVS_OK.
- * A successful result must set end_bit_offset strictly after the cursor's
- * current offset and no later than the declared payload size.
+ * A successful macroblock must set end_bit_offset no earlier than the cursor's
+ * current offset and no later than the declared payload size. Arithmetic bins
+ * may be consumed entirely from the decoder's prefetched range/value state,
+ * so even an explicit macroblock need not advance the first-unread source bit.
  */
 typedef cavs_result (*cavs_slice_macroblock_reader)(
     void *opaque, uint32_t macroblock_address, cavs_macroblock *macroblock);
@@ -43,7 +45,7 @@ cavs_result cavs_slice_cursor_init(const cavs_picture *picture, uint8_t field,
                                    size_t payload_bits,
                                    cavs_slice_cursor *cursor);
 
-/* Decodes and reconstructs until verified payload end, crossing MB rows. */
+/* Decodes exactly the remaining field macroblocks and verifies payload end. */
 cavs_result cavs_slice_decode(
     cavs_slice_cursor *cursor, cavs_slice_macroblock_reader read_macroblock,
     void *reader_opaque,

@@ -369,10 +369,14 @@ static cavs_result validate_geometry(const cavs_picture *picture,
 /* Validates metadata completely before any in-place sample modification. */
 static cavs_result validate_macroblocks(const cavs_picture *picture,
                                         const cavs_loop_filter_config *config,
-                                        const cavs_filter_geometry *geometry) {
+                                        const cavs_filter_geometry *geometry,
+                                        size_t row_begin, size_t row_end) {
     size_t index;
     if (picture->macroblocks == NULL) return CAVS_ERR_INVALID_ARGUMENT;
-    for (index = 0U; index < picture->macroblock_count; ++index) {
+    if (row_begin > row_end || row_end > geometry->macroblock_height)
+        return CAVS_ERR_INVALID_ARGUMENT;
+    index = row_begin * geometry->macroblock_width;
+    for (; index < row_end * geometry->macroblock_width; ++index) {
         const cavs_macroblock *macroblock = &picture->macroblocks[index];
         size_t row = index / geometry->macroblock_width;
         size_t column = index % geometry->macroblock_width;
@@ -537,9 +541,9 @@ static void filter_internal_horizontal_luma(
  */
 static cavs_result filter_macroblocks(
     cavs_picture *picture, const cavs_loop_filter_config *config,
-    const cavs_filter_geometry *geometry) {
+    const cavs_filter_geometry *geometry, size_t row_begin, size_t row_end) {
     size_t row;
-    for (row = 0U; row < geometry->macroblock_height; ++row) {
+    for (row = row_begin; row < row_end; ++row) {
         size_t column;
         size_t logical_row;
         size_t parity;
@@ -622,24 +626,11 @@ static cavs_result filter_macroblocks(
     return CAVS_OK;
 }
 
-cavs_result cavs_loop_filter_picture(
-    cavs_picture *picture, const cavs_loop_filter_config *config) {
-    cavs_filter_geometry geometry;
-    cavs_result result;
+/* Validates the syntax-controlled filter configuration before modification. */
+static cavs_result validate_config(
+    const cavs_picture *picture, const cavs_loop_filter_config *config) {
     if (config == NULL || config->enabled > 1U)
         return CAVS_ERR_INVALID_ARGUMENT;
-    result = validate_geometry(picture, &geometry);
-    if (result != CAVS_OK) return result;
-    if (picture->picture_type > CAVS_PICTURE_B ||
-        (picture->completed_fields & (uint8_t)~CAVS_FIELD_BOTH) != 0U)
-        return CAVS_ERR_INVALID_ARGUMENT;
-    if (picture->filtered != 0U) return CAVS_ERR_INVALID_STATE;
-    if ((picture->completed_fields & CAVS_FIELD_BOTH) != CAVS_FIELD_BOTH)
-        return CAVS_ERR_INVALID_STATE;
-    if (config->enabled == 0U) {
-        picture->filtered = 1U;
-        return CAVS_OK;
-    }
     if ((config->motion_unit != 4U && config->motion_unit != 8U) ||
         config->alpha_c_offset < -8 || config->alpha_c_offset > 8 ||
         config->beta_offset < -8 || config->beta_offset > 8 ||
@@ -651,9 +642,62 @@ cavs_result cavs_loop_filter_picture(
          config->first_field != CAVS_FIELD_TOP &&
          config->first_field != CAVS_FIELD_BOTTOM))
         return CAVS_ERR_INVALID_ARGUMENT;
-    result = validate_macroblocks(picture, config, &geometry);
+    return CAVS_OK;
+}
+
+cavs_result cavs_loop_filter_field(
+    cavs_picture *picture, const cavs_loop_filter_config *config,
+    uint8_t field) {
+    cavs_filter_geometry geometry;
+    size_t row_begin;
+    size_t row_end;
+    cavs_result result;
+    result = validate_geometry(picture, &geometry);
     if (result != CAVS_OK) return result;
-    result = filter_macroblocks(picture, config, &geometry);
+    result = validate_config(picture, config);
+    if (result != CAVS_OK) return result;
+    if (picture->field_picture == 0U ||
+        (field != CAVS_FIELD_TOP && field != CAVS_FIELD_BOTTOM))
+        return CAVS_ERR_INVALID_ARGUMENT;
+    if (picture->picture_type > CAVS_PICTURE_B ||
+        (picture->completed_fields & (uint8_t)~CAVS_FIELD_BOTH) != 0U)
+        return CAVS_ERR_INVALID_ARGUMENT;
+    if (picture->filtered != 0U) return CAVS_ERR_INVALID_STATE;
+    if ((picture->completed_fields & field) == 0U)
+        return CAVS_ERR_INVALID_STATE;
+    row_begin = field == config->first_field ? 0U : geometry.field_rows;
+    row_end = row_begin + geometry.field_rows;
+    if (config->enabled == 0U) return CAVS_OK;
+    result = validate_macroblocks(picture, config, &geometry,
+                                  row_begin, row_end);
+    if (result != CAVS_OK) return result;
+    return filter_macroblocks(picture, config, &geometry,
+                              row_begin, row_end);
+}
+
+cavs_result cavs_loop_filter_picture(
+    cavs_picture *picture, const cavs_loop_filter_config *config) {
+    cavs_filter_geometry geometry;
+    cavs_result result;
+    result = validate_geometry(picture, &geometry);
+    if (result != CAVS_OK) return result;
+    result = validate_config(picture, config);
+    if (result != CAVS_OK) return result;
+    if (picture->picture_type > CAVS_PICTURE_B ||
+        (picture->completed_fields & (uint8_t)~CAVS_FIELD_BOTH) != 0U)
+        return CAVS_ERR_INVALID_ARGUMENT;
+    if (picture->filtered != 0U) return CAVS_ERR_INVALID_STATE;
+    if ((picture->completed_fields & CAVS_FIELD_BOTH) != CAVS_FIELD_BOTH)
+        return CAVS_ERR_INVALID_STATE;
+    if (config->enabled == 0U) {
+        picture->filtered = 1U;
+        return CAVS_OK;
+    }
+    result = validate_macroblocks(picture, config, &geometry, 0U,
+                                  geometry.macroblock_height);
+    if (result != CAVS_OK) return result;
+    result = filter_macroblocks(picture, config, &geometry, 0U,
+                                geometry.macroblock_height);
     if (result != CAVS_OK) return result;
     picture->filtered = 1U;
     return CAVS_OK;

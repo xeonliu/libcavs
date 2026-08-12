@@ -37,9 +37,19 @@ cavs_result cavs_loop_filter_boundary_strength(
  * GB/T 20090.2-2013 9.12, Figures 44-46, Tables 73-74 filter a complete
  * reconstructed picture in macroblock decode order. Picture and slice
  * boundaries are excluded. Field pictures are filtered through their
- * interleaved physical lines after both fields have completed.
+ * interleaved physical lines.
  */
 cavs_result cavs_loop_filter_picture(
     cavs_picture *picture, const cavs_loop_filter_config *config);
+
+/*
+ * GB/T 20090.16-2016 9.11.1 filters a decoded field before it can be used as
+ * the reference for a later field. This internal entry filters exactly one
+ * completed physical field and leaves picture->filtered for the complete-
+ * picture owner to publish after all fields have completed.
+ */
+cavs_result cavs_loop_filter_field(
+    cavs_picture *picture, const cavs_loop_filter_config *config,
+    uint8_t field);
 
 #endif

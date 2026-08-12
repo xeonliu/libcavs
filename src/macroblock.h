@@ -50,6 +50,15 @@ typedef struct cavs_motion_vector {
     int32_t y;
     int8_t reference_index;
     uint8_t valid;
+    /*
+     * GB/T 20090.16-2016 9.6.1 and 9.9.1 b) require Direct prediction to
+     * recover DistanceIndexRef and the physical field selected by a stored
+     * co-located P motion vector. reference_index is local to the P field's
+     * decode-time list, so the resolved identity is frozen with the vector.
+     */
+    uint16_t reference_distance_index;
+    uint8_t reference_field;
+    uint8_t reference_identity_valid;
 } cavs_motion_vector;
 
 typedef struct cavs_mb_partition {

@@ -20,7 +20,10 @@ endfunction()
 
 set(LIBCAVS_SOURCES src/decoder.c src/bitreader.c src/safe.c
   src/pseudo_start_code.c src/syntax.c src/macroblock.c src/coefficients.c
-  src/reconstruction.c src/prediction.c src/motion.c)
+  src/reconstruction.c src/prediction.c src/motion.c src/image.c
+  src/advanced_entropy.c src/broadcast_macroblock.c src/broadcast_motion.c
+  src/broadcast_reconstruction.c src/slice_decode.c src/loop_filter.c
+  src/dpb.c)
 
 add_library(cavs_static STATIC ${LIBCAVS_SOURCES})
 add_library(cavs::static ALIAS cavs_static)

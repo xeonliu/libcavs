@@ -1040,14 +1040,26 @@ cavs_result cavs_assemble_broadcast_picture_macroblock_motion(
          partition_index < syntax.partition_count; ++partition_index) {
         cavs_broadcast_motion_partition *partition =
             &syntax.partition[partition_index];
-        int64_t x0 = (int64_t)entropy_macroblock->column * 16 + partition->x;
+        /*
+         * GB/T 20090.16-2016 9.9.1 b) 1) defines E as the macroblock
+         * containing the current 8x8 block when an intra co-located block
+         * selects the Direct fallback. Consequently all four Direct
+         * partitions acquire A/B/C/D from the 16x16 macroblock geometry;
+         * their individual 8x8 offsets must not move C inside that macroblock.
+         * Non-intra Direct ignores these candidates, so the same geometry is
+         * used for the complete Direct syntax path without another decision.
+         */
+        int direct = partition->mode == CAVS_BROADCAST_MOTION_DIRECT;
+        int64_t x0 = (int64_t)entropy_macroblock->column * 16 +
+                     (direct ? 0 : partition->x);
         int64_t local_row = context->picture_structure == 0U ?
             (int64_t)(entropy_macroblock->row % geometry.field_rows) :
             entropy_macroblock->row;
         int64_t y0 = local_row * 16 * geometry.vertical_step +
                      geometry.field_parity +
-                     (int64_t)partition->y * geometry.vertical_step;
-        int64_t x1 = x0 + partition->width - 1;
+                     (direct ? 0 :
+                      (int64_t)partition->y * geometry.vertical_step);
+        int64_t x1 = x0 + (direct ? 16 : partition->width) - 1;
         int64_t sample_x[CAVS_MOTION_NEIGHBOR_COUNT];
         int64_t sample_y[CAVS_MOTION_NEIGHBOR_COUNT];
         unsigned direction;
