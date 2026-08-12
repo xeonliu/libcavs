@@ -94,7 +94,7 @@ if(LIBCAVS_BUILD_TESTS)
   enable_testing()
   add_library(cavs_test_internal STATIC ${LIBCAVS_SOURCES})
   target_include_directories(cavs_test_internal PUBLIC include src)
-  target_compile_definitions(cavs_test_internal PRIVATE CAVS_TESTING)
+  target_compile_definitions(cavs_test_internal PUBLIC CAVS_STATIC PRIVATE CAVS_TESTING)
   target_compile_features(cavs_test_internal PUBLIC c_std_99)
   libcavs_enable_warnings(cavs_test_internal)
 
