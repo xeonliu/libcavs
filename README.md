@@ -35,9 +35,10 @@ conformance remain pending.
 This checklist follows GB/T 20090.16-2016. `Implemented` means that the rule
 is present in the decoder path and has focused local tests; it does not mean
 independent conformance. `Partial` means that at least one normative branch is
-implemented, but the complete clause is not. `Not applicable` marks
-definitions, notation, encoder-only requirements, and informative text that do
-not require a separate decoder procedure.
+implemented, but the complete clause is not. `Not implemented` means that no
+decoder path implements the normative item. `Not applicable` marks definitions,
+notation, encoder-only requirements, and informative text that do not require a
+separate decoder procedure.
 
 ### Preliminary clauses
 
@@ -432,8 +433,9 @@ not require a separate decoder procedure.
 - **Implemented -- Table 42, YUV420 `MbCBP` mapping.**
 - **Not implemented -- Table 43, YUV422 `MbCBP422` mapping.** The mapping is
   not connected to broadcast macroblock reconstruction.
-- **Implemented -- 8.3, `ce(v)`.** Basic-entropy macroblock and coefficient VLC
-  parsing is integrated for supported YUV420 field pictures.
+- **Partial -- 8.3, `ce(v)`.** Basic-entropy macroblock and coefficient VLC
+  parsing is integrated for the exercised YUV420 field branches; complete P/B,
+  field/multi-slice, and YUV422 integration is pending.
 - **Implemented -- 8.4, `ae(v)` parsing.**
 - **Implemented -- 8.4.1, AEC overview.** Syntax values are assembled from
   bounded bin strings.
@@ -484,35 +486,56 @@ not require a separate decoder procedure.
 - **Implemented -- Table 55, P-picture macroblock types.**
 - **Implemented -- Table 56, B-picture macroblock types.**
 - **Implemented -- Table 57, B_8x8 subtypes.**
-- **Implemented -- 9.4.3, Neighbor blocks.** Geometry, availability, slice
-  boundaries, and field rows are represented.
-- **Implemented -- Figure 11, Current and neighboring block positions.**
-- **Implemented -- Figure 12, Current and neighboring macroblock positions.**
-- **Implemented -- Table 58, Neighbor-block positions.**
-- **Implemented -- 9.4.4, Intra-prediction modes.**
-- **Implemented -- 9.4.4.1, Overview.**
-- **Implemented -- 9.4.4.2, 8x8 intra-mode derivation.**
-- **Implemented -- Table 59, 8x8 luma intra modes.**
-- **Implemented -- Table 60, 8x8 chroma intra modes.**
-- **Implemented -- Figure 13, 8x8 luma intra modes.**
+- **Partial -- 9.4.3, Neighbor blocks.** Geometry, availability, slice
+  boundaries, and field rows are represented, but the broadcast motion adapter
+  still lacks focused integration vectors.
+- **Partial -- Figure 11, Current and neighboring block positions.** The
+  geometry is represented; broadcast motion integration tests are pending.
+- **Partial -- Figure 12, Current and neighboring macroblock positions.** The
+  geometry is represented; broadcast motion integration tests are pending.
+- **Partial -- Table 58, Neighbor-block positions.** Its positions are used by
+  the adapter, but focused broadcast-path vectors are pending.
+- **Partial -- 9.4.4, Intra-prediction modes.** The 8x8 modes are present, but
+  complete same-field reconstruction integration is not independently tested.
+- **Partial -- 9.4.4.1, Overview.** Only the supported YUV420 field path is
+  connected.
+- **Partial -- 9.4.4.2, 8x8 intra-mode derivation.** Mode derivation is present;
+  complete broadcast integration vectors are pending.
+- **Partial -- Table 59, 8x8 luma intra modes.** All modes have scalar kernels,
+  but the broadcast same-field path remains partially verified.
+- **Partial -- Table 60, 8x8 chroma intra modes.** All YUV420 modes have scalar
+  kernels, but the broadcast same-field path remains partially verified.
+- **Partial -- Figure 13, 8x8 luma intra modes.** The depicted modes exist; their
+  broadcast same-field integration is only partially verified.
 - **Partial -- 9.4.5, Reference-picture selection.** Supported field-picture
   topologies, default references, and
   enhanced/no-forward branches are implemented; frame/progressive topologies
   are not integrated.
-- **Partial -- Figure 14, Reference-index marking method 1.**
-- **Partial -- Figure 15, Reference-index marking method 2.**
-- **Partial -- Figure 16, Reference-index marking method 3.**
-- **Partial -- Figure 17, Reference-index marking method 4.**
-- **Partial -- Figure 18, Reference-index marking method 5.**
-- **Partial -- Figure 19, Reference-index marking method 6.**
-- **Partial -- Figure 20, Reference-index marking method 7.**
-- **Implemented -- 9.4.6, Motion vectors.**
-- **Implemented -- 9.4.6.1, Overview.**
-- **Implemented -- 9.4.6.2, Luma motion-vector prediction.** Distance
+- **Partial -- Figure 14, Reference-index marking method 1.** The second field
+  of an I picture is represented; focused DPB integration vectors are pending.
+- **Not implemented -- Figure 15, Reference-index marking method 2.** This is
+  the P frame-picture topology, which the broadcast reconstruction path rejects.
+- **Partial -- Figure 16, Reference-index marking method 3.** The first-field P
+  topology is represented; focused DPB integration vectors are pending.
+- **Partial -- Figure 17, Reference-index marking method 4.** The second-field P
+  topology is represented; focused DPB integration vectors are pending.
+- **Not implemented -- Figure 18, Reference-index marking method 5.** This is
+  the B frame-picture topology, which the broadcast reconstruction path rejects.
+- **Partial -- Figure 19, Reference-index marking method 6.** The first-field B
+  topology is represented; focused DPB integration vectors are pending.
+- **Partial -- Figure 20, Reference-index marking method 7.** The second-field B
+  topology is represented; focused DPB integration vectors are pending.
+- **Partial -- 9.4.6, Motion vectors.** Core prediction and difference decoding
+  exist, but broadcast P/B assembly and sample integration remain incomplete.
+- **Partial -- 9.4.6.1, Overview.** Only the supported field-picture branches
+  are connected.
+- **Partial -- 9.4.6.2, Luma motion-vector prediction.** Distance
   normalization, spatial prediction, partition shortcuts, scaling, and MVD
-  addition are used by supported pictures.
-- **Implemented -- Figure 21, 8x16 and 16x8 motion prediction.**
-- **Implemented -- 9.4.6.3, Luma motion-vector decoding.**
+  addition exist; broadcast adapter integration vectors are pending.
+- **Partial -- Figure 21, 8x16 and 16x8 motion prediction.** The partition
+  shortcuts exist, but focused broadcast-path vectors are pending.
+- **Partial -- 9.4.6.3, Luma motion-vector decoding.** The core decoder is
+  tested; complete broadcast P/B integration is pending.
 - **Partial -- 9.4.7, Macroblock coding pattern.** Six YUV420 blocks are
   dispatched; the two extra YUV422 blocks are not.
 - **Implemented -- 9.4.8, Quantization parameters.** Picture, slice, predicted
@@ -537,55 +560,80 @@ not require a separate decoder procedure.
 - **Implemented -- Table 62, QP inverse-quantization parameters.**
 - **Implemented -- 9.7, Inverse transform.** The scalar normative 8x8 integer
   inverse transform is applied to decoded blocks.
-- **Implemented -- 9.8, Intra prediction.**
-- **Implemented -- 9.8.1, Overview.**
-- **Implemented -- 9.8.2, 8x8 reference-sample acquisition.**
-- **Implemented -- 9.8.3, 8x8 luma intra prediction.**
-- **Implemented -- 9.8.4, 8x8 chroma intra prediction.**
+- **Partial -- 9.8, Intra prediction.** Scalar luma/chroma prediction and
+  same-field reference acquisition exist, but focused end-to-end broadcast
+  vectors remain incomplete.
+- **Partial -- 9.8.1, Overview.** Only the supported YUV420 successive-field
+  path is connected.
+- **Partial -- 9.8.2, 8x8 reference-sample acquisition.** Same-field and
+  same-slice acquisition exists; complete boundary vectors are pending.
+- **Partial -- 9.8.3, 8x8 luma intra prediction.** All scalar modes exist, but
+  their broadcast reconstruction integration remains partially verified.
+- **Partial -- 9.8.4, 8x8 chroma intra prediction.** All YUV420 scalar modes
+  exist, but their broadcast reconstruction integration remains partially
+  verified.
 - **Partial -- 9.9, Inter prediction.** Frame-picture and YUV422 integration
   remain.
 - **Partial -- 9.9.1, Luma motion-vector derivation.** P_Skip, B_Direct,
   symmetric, co-located, same-polarity skip,
   and enhanced-field math are implemented; frame-picture variants are not
   integrated end to end.
-- **Partial -- Figure 24, Direct-mode derivation 1.**
-- **Partial -- Figure 25, Direct-mode derivation 2.**
-- **Partial -- Figure 26, Direct-mode derivation 3.**
-- **Partial -- Figure 27, Direct-mode derivation 4.**
-- **Partial -- Figure 28, Symmetric-mode derivation 1.**
-- **Partial -- Figure 29, Symmetric-mode derivation 2.**
+- **Not implemented -- Figure 24, Direct-mode derivation 1.** This is a
+  frame-picture branch, which the broadcast reconstruction path rejects.
+- **Not implemented -- Figure 25, Direct-mode derivation 2.** This is a
+  frame-picture branch, which the broadcast reconstruction path rejects.
+- **Partial -- Figure 26, Direct-mode derivation 3.** The field-picture branch
+  and enhanced-field corrections exist; focused sample integration is pending.
+- **Partial -- Figure 27, Direct-mode derivation 4.** The field-picture branch
+  and enhanced-field corrections exist; focused sample integration is pending.
+- **Not implemented -- Figure 28, Symmetric-mode derivation 1.** This is a
+  frame-picture branch, which the broadcast reconstruction path rejects.
+- **Partial -- Figure 29, Symmetric-mode derivation 2.** The field-picture
+  branch exists; focused sample integration is pending.
 - **Partial -- 9.9.2, Reference-sample derivation.** YUV422 is not integrated.
-- **Implemented -- 9.9.2.1, Overview.**
-- **Implemented -- 9.9.2.2, Luma interpolation.** Edge replacement and every
-  quarter-sample phase are used by motion compensation.
-- **Implemented -- Figure 30, Integer, half-, and quarter-sample positions.**
-- **Implemented -- Table 63, Predicted luma sample selection.**
+- **Partial -- 9.9.2.1, Overview.** Scalar interpolation is complete, but the
+  broadcast motion-compensation adapter remains partially verified.
+- **Partial -- 9.9.2.2, Luma interpolation.** Edge replacement and every
+  quarter-sample phase have focused scalar tests; broadcast P/B sample
+  integration is pending.
+- **Partial -- Figure 30, Integer, half-, and quarter-sample positions.** All
+  depicted scalar phases are tested; broadcast sample integration is pending.
+- **Partial -- Table 63, Predicted luma sample selection.** The phase mapping is
+  implemented and tested in the scalar interpolator; broadcast adapter vectors
+  are pending.
 - **Partial -- 9.9.2.3, Chroma interpolation.** Every
   eighth-sample phase and edge replacement are implemented for YUV420; YUV422
   is not integrated.
 - **Partial -- Figure 31, Chroma interpolation.** Implemented for YUV420 only.
 - **Implemented -- 9.9.3, Weighted prediction.** Slice/macroblock flag
   selection, scale/shift, clipping, and P/B combination are connected.
-- **Implemented -- 9.10, Reconstruction.** Intra, single-reference, and
-  bidirectional prediction are combined with residuals using eight-bit
-  clipping.
+- **Partial -- 9.10, Reconstruction.** Intra, single-reference, and
+  bidirectional composition exists with eight-bit clipping, but complete
+  broadcast P/B and field-picture sample integration is pending.
 - **Partial -- 9.11, Loop filtering.** YUV420 field filtering is integrated;
   YUV422 is not reached by broadcast decoding.
 - **Partial -- 9.11.1, Overview and traversal.** YUV420 vertical/horizontal
   traversal and slice-boundary exclusion are integrated.
-- **Implemented -- Figure 32, YUV420 boundaries to filter.**
+- **Partial -- Figure 32, YUV420 boundaries to filter.** The field traversal is
+  connected, but focused picture-level filter vectors are pending.
 - **Not implemented -- Figure 33, YUV422 boundaries to filter.** Generic
   geometry exists, but the broadcast path never reaches it.
-- **Implemented -- 9.11.2, Boundary strength.** Intra, reference-index, and
-  motion-vector rules derive `Bs` for P/B and predicted second fields.
-- **Implemented -- 9.11.3, Boundary thresholds.**
-- **Implemented -- Figure 34, Samples around an 8x8 boundary.**
-- **Implemented -- Table 64, Alpha and beta thresholds.**
-- **Implemented -- 9.11.4, `Bs == 2` filtering.** Strong luma/chroma kernels
-  are applied in the field completion path.
-- **Implemented -- 9.11.5, `Bs == 1` filtering.** Normal kernels use the
-  normative clipping table and signed rounding rules.
-- **Implemented -- Table 65, Filter clipping parameter.**
+- **Partial -- 9.11.2, Boundary strength.** Intra, reference-index, and
+  motion-vector rules exist, but complete P/B and predicted-second-field vectors
+  are pending.
+- **Partial -- 9.11.3, Boundary thresholds.** Threshold derivation and tables
+  exist; exhaustive decoder-path vectors are pending.
+- **Partial -- Figure 34, Samples around an 8x8 boundary.** The depicted sample
+  layout is used by the scalar kernel; picture-level integration tests are
+  pending.
+- **Partial -- Table 64, Alpha and beta thresholds.** The normative values are
+  present and used; exhaustive focused vectors are pending.
+- **Partial -- 9.11.4, `Bs == 2` filtering.** Strong luma/chroma kernels exist
+  in the field completion path; complete integration vectors are pending.
+- **Partial -- 9.11.5, `Bs == 1` filtering.** Normal kernels use the normative
+  clipping values and signed rounding; complete integration vectors are pending.
+- **Partial -- Table 65, Filter clipping parameter.** The normative values are
+  present and used; exhaustive focused vectors are pending.
 
 ### Annexes
 
