@@ -27,6 +27,13 @@ typedef struct cavs_reference_plane {
     size_t stride;
 } cavs_reference_plane;
 
+typedef struct cavs_picture_motion_geometry {
+    size_t field_rows;
+    size_t field_index;
+    int64_t field_parity;
+    int64_t vertical_step;
+} cavs_picture_motion_geometry;
+
 /* Computes modulo-512 distance; this introduces no codec decision. */
 static uint16_t distance_index(uint16_t later, uint16_t earlier) {
     return (uint16_t)(((unsigned)later + 512U - earlier) % 512U);
@@ -655,6 +662,423 @@ cavs_result cavs_assemble_broadcast_macroblock_motion(
             clear_motion(&assembled.partition[index]
                               .motion[CAVS_PRED_BACKWARD]);
     }
+    *macroblock = assembled;
+    return CAVS_OK;
+}
+
+/* Initializes the normalized unavailable-candidate representation. */
+static void unavailable_picture_candidate(
+    cavs_broadcast_motion_candidate *candidate) {
+    memset(candidate, 0, sizeof(*candidate));
+    candidate->source_partition = CAVS_BROADCAST_NO_PARTITION;
+    candidate->value.reference_index = -1;
+    candidate->value.block_distance = 1U;
+}
+
+/* Validates picture indexing and the current frame/field metadata half. */
+static cavs_result picture_motion_geometry(
+    const cavs_broadcast_motion_context *context,
+    const cavs_picture *picture, const cavs_macroblock *macroblock,
+    cavs_picture_motion_geometry *geometry) {
+    size_t required;
+    size_t address;
+    uint8_t expected_field;
+    if (context == NULL || picture == NULL || macroblock == NULL ||
+        geometry == NULL || picture->format != CAVS_YUV420P8 ||
+        picture->picture_type != context->picture_type ||
+        picture->macroblock_width == 0U || picture->macroblock_height == 0U ||
+        picture->macroblocks == NULL || picture->field_picture > 1U ||
+        picture->top_field_first > 1U ||
+        picture->coded_width != (uint32_t)picture->macroblock_width * 16U ||
+        picture->coded_height != (uint32_t)picture->macroblock_height * 16U)
+        return CAVS_ERR_INVALID_ARGUMENT;
+    required = (size_t)picture->macroblock_width *
+               picture->macroblock_height;
+    if (picture->macroblock_count < required ||
+        macroblock->row >= picture->macroblock_height ||
+        macroblock->column >= picture->macroblock_width)
+        return CAVS_ERR_CORRUPT_BITSTREAM;
+    address = (size_t)macroblock->row * picture->macroblock_width +
+              macroblock->column;
+    if (address > UINT32_MAX || macroblock->address != (uint32_t)address)
+        return CAVS_ERR_CORRUPT_BITSTREAM;
+    memset(geometry, 0, sizeof(*geometry));
+    geometry->vertical_step = 1;
+    if (context->picture_structure != 0U) {
+        if (picture->field_picture != 0U)
+            return CAVS_ERR_INVALID_STATE;
+        geometry->field_rows = picture->macroblock_height;
+        return CAVS_OK;
+    }
+    if (picture->field_picture == 0U ||
+        (picture->macroblock_height & 1U) != 0U ||
+        (picture->coded_height & 31U) != 0U)
+        return CAVS_ERR_INVALID_STATE;
+    geometry->field_rows = picture->macroblock_height / 2U;
+    if (geometry->field_rows == 0U)
+        return CAVS_ERR_INVALID_ARGUMENT;
+    geometry->field_index = macroblock->row / geometry->field_rows;
+    if (geometry->field_index != context->second_field)
+        return CAVS_ERR_CORRUPT_BITSTREAM;
+    expected_field = geometry->field_index == 0U ?
+        (picture->top_field_first != 0U ? CAVS_BROADCAST_FIELD_TOP :
+                                         CAVS_BROADCAST_FIELD_BOTTOM) :
+        (picture->top_field_first != 0U ? CAVS_BROADCAST_FIELD_BOTTOM :
+                                         CAVS_BROADCAST_FIELD_TOP);
+    if (context->current_field != expected_field)
+        return CAVS_ERR_INVALID_STATE;
+    geometry->field_parity = expected_field == CAVS_BROADCAST_FIELD_BOTTOM ?
+        1 : 0;
+    geometry->vertical_step = 2;
+    return CAVS_OK;
+}
+
+/* Locates the partition containing one macroblock-local luma sample. */
+static int syntax_partition_at(
+    const cavs_broadcast_motion_syntax *syntax, uint8_t x, uint8_t y,
+    unsigned *partition_index) {
+    unsigned index;
+    for (index = 0U; index < syntax->partition_count; ++index) {
+        const cavs_broadcast_motion_partition *partition =
+            &syntax->partition[index];
+        if (x >= partition->x &&
+            (unsigned)x < (unsigned)partition->x + partition->width &&
+            y >= partition->y &&
+            (unsigned)y < (unsigned)partition->y + partition->height) {
+            *partition_index = index;
+            return 1;
+        }
+    }
+    return 0;
+}
+
+/* Validates committed inter geometry and locates one sample's partition. */
+static cavs_result picture_partition_at(
+    const cavs_macroblock *macroblock, uint8_t x, uint8_t y,
+    const cavs_mb_partition **selected) {
+    unsigned covered = 0U;
+    unsigned index;
+    *selected = NULL;
+    if (macroblock->partition_count == 0U ||
+        macroblock->partition_count > CAVS_MAX_MB_PARTITIONS)
+        return CAVS_ERR_INVALID_STATE;
+    for (index = 0U; index < macroblock->partition_count; ++index) {
+        const cavs_mb_partition *partition = &macroblock->partition[index];
+        int forward = partition->motion[CAVS_PRED_FORWARD].valid != 0U;
+        int backward = partition->motion[CAVS_PRED_BACKWARD].valid != 0U;
+        unsigned block;
+        if ((partition->x != 0U && partition->x != 8U) ||
+            (partition->y != 0U && partition->y != 8U) ||
+            (partition->width != 8U && partition->width != 16U) ||
+            (partition->height != 8U && partition->height != 16U) ||
+            (unsigned)partition->x + partition->width > 16U ||
+            (unsigned)partition->y + partition->height > 16U ||
+            partition->direction > CAVS_PRED_BIDIRECTIONAL ||
+            partition->motion[CAVS_PRED_FORWARD].valid > 1U ||
+            partition->motion[CAVS_PRED_BACKWARD].valid > 1U ||
+            (partition->direction == CAVS_PRED_FORWARD &&
+             (!forward || backward)) ||
+            (partition->direction == CAVS_PRED_BACKWARD &&
+             (forward || !backward)) ||
+            ((partition->direction == CAVS_PRED_SYMMETRIC ||
+              partition->direction == CAVS_PRED_BIDIRECTIONAL) &&
+             (!forward || !backward)))
+            return CAVS_ERR_INVALID_STATE;
+        for (block = 0U; block < CAVS_MB_MOTION_BLOCKS; ++block) {
+            unsigned block_x = (block & 1U) * 8U + 4U;
+            unsigned block_y = (block >> 1U) * 8U + 4U;
+            if (block_x >= partition->x &&
+                block_x < (unsigned)partition->x + partition->width &&
+                block_y >= partition->y &&
+                block_y < (unsigned)partition->y + partition->height) {
+                unsigned mask = 1U << block;
+                if ((covered & mask) != 0U)
+                    return CAVS_ERR_INVALID_STATE;
+                covered |= mask;
+            }
+        }
+        if (x >= partition->x &&
+            (unsigned)x < (unsigned)partition->x + partition->width &&
+            y >= partition->y &&
+            (unsigned)y < (unsigned)partition->y + partition->height)
+            *selected = partition;
+    }
+    return covered == 15U && *selected != NULL ? CAVS_OK :
+                                                 CAVS_ERR_INVALID_STATE;
+}
+
+/* Converts one committed external block to a prediction candidate. */
+static cavs_result external_picture_candidate(
+    const cavs_broadcast_motion_context *context,
+    const cavs_macroblock *neighbor, uint8_t x, uint8_t y,
+    unsigned direction, cavs_broadcast_motion_candidate *candidate) {
+    const cavs_mb_partition *partition;
+    const cavs_motion_vector *motion;
+    cavs_resolved_reference reference;
+    cavs_result result;
+    candidate->value.available = 1U;
+    candidate->value.intra = neighbor->is_intra;
+    if (neighbor->is_intra != 0U) return CAVS_OK;
+    result = picture_partition_at(neighbor, x, y, &partition);
+    if (result != CAVS_OK) return result;
+    motion = &partition->motion[direction];
+    if (motion->valid == 0U) {
+        candidate->value.reference_index = -1;
+        candidate->value.block_distance = 1U;
+        return CAVS_OK;
+    }
+    result = resolve_reference(context, direction, motion->reference_index,
+                               &reference);
+    if (result != CAVS_OK) return result;
+    candidate->value.same_direction = 1U;
+    candidate->value.vector = luma_value(motion);
+    candidate->value.reference_index = motion->reference_index;
+    candidate->value.block_distance = reference.entry->block_distance;
+    return CAVS_OK;
+}
+
+/*
+ * Implements Part 16 Table 58 lookup in physical sample coordinates. Field
+ * rows use step two, then map back to their decoder-order metadata half.
+ */
+static cavs_result picture_candidate_at(
+    const cavs_broadcast_motion_context *context,
+    const cavs_picture *picture, const cavs_macroblock *current,
+    const cavs_broadcast_motion_syntax *syntax,
+    const cavs_picture_motion_geometry *geometry,
+    unsigned current_partition, unsigned direction,
+    int64_t sample_x, int64_t sample_y,
+    cavs_broadcast_motion_candidate *candidate) {
+    size_t metadata_row;
+    size_t column;
+    size_t address;
+    int64_t field_y;
+    uint8_t local_x;
+    uint8_t local_y;
+    unsigned source_partition;
+    const cavs_macroblock *neighbor;
+    unavailable_picture_candidate(candidate);
+    if (sample_x < 0 || sample_y < 0 ||
+        (uint64_t)sample_x >= picture->coded_width ||
+        (uint64_t)sample_y >= picture->coded_height)
+        return CAVS_OK;
+    column = (size_t)sample_x / 16U;
+    local_x = (uint8_t)((uint64_t)sample_x % 16U);
+    if (context->picture_structure == 0U) {
+        if ((sample_y & 1) != geometry->field_parity)
+            return CAVS_OK;
+        field_y = (sample_y - geometry->field_parity) / 2;
+        metadata_row = geometry->field_index * geometry->field_rows +
+                       (size_t)field_y / 16U;
+        local_y = (uint8_t)((uint64_t)field_y % 16U);
+    } else {
+        metadata_row = (size_t)sample_y / 16U;
+        local_y = (uint8_t)((uint64_t)sample_y % 16U);
+    }
+    if (metadata_row >= picture->macroblock_height ||
+        column >= picture->macroblock_width)
+        return CAVS_OK;
+    if (metadata_row == current->row && column == current->column) {
+        if (syntax_partition_at(syntax, local_x, local_y,
+                                &source_partition) &&
+            source_partition < current_partition) {
+            candidate->source_partition = (int8_t)source_partition;
+        }
+        return CAVS_OK;
+    }
+    address = metadata_row * picture->macroblock_width + column;
+    if (address >= picture->macroblock_count) return CAVS_OK;
+    neighbor = &picture->macroblocks[address];
+    if (address >= current->address || neighbor->end_bit_offset == 0U ||
+        neighbor->slice_id != current->slice_id)
+        return CAVS_OK;
+    if (neighbor->address != address || neighbor->row != metadata_row ||
+        neighbor->column != column || neighbor->is_intra > 1U)
+        return CAVS_ERR_INVALID_STATE;
+    return external_picture_candidate(context, neighbor, local_x, local_y,
+                                      direction, candidate);
+}
+
+/* Maps one entropy direction and its stored MVD/reference pair. */
+static cavs_result picture_partition_syntax(
+    const cavs_macroblock *macroblock, unsigned index,
+    cavs_broadcast_motion_partition *syntax_partition) {
+    const cavs_mb_partition *partition = &macroblock->partition[index];
+    const cavs_motion_vector *forward =
+        &partition->motion[CAVS_PRED_FORWARD];
+    const cavs_motion_vector *backward =
+        &partition->motion[CAVS_PRED_BACKWARD];
+    unsigned direction;
+    if (forward->valid > 1U || backward->valid > 1U ||
+        partition->direction > CAVS_PRED_BIDIRECTIONAL)
+        return CAVS_ERR_CORRUPT_BITSTREAM;
+    syntax_partition->x = partition->x;
+    syntax_partition->y = partition->y;
+    syntax_partition->width = partition->width;
+    syntax_partition->height = partition->height;
+    for (direction = 0U; direction < CAVS_MB_DIRECTIONS; ++direction) {
+        const cavs_motion_vector *motion = &partition->motion[direction];
+        syntax_partition->reference_index[direction] = motion->reference_index;
+        syntax_partition->difference[direction] = luma_value(motion);
+    }
+    if (macroblock->type < CAVS_MB_B_SKIP) {
+        if (partition->direction != CAVS_PRED_FORWARD ||
+            forward->valid == 0U || backward->valid != 0U)
+            return CAVS_ERR_CORRUPT_BITSTREAM;
+        syntax_partition->mode = CAVS_BROADCAST_MOTION_FORWARD;
+    } else if (partition->direction == CAVS_PRED_FORWARD &&
+               forward->valid != 0U && backward->valid == 0U) {
+        syntax_partition->mode = CAVS_BROADCAST_MOTION_FORWARD;
+    } else if (partition->direction == CAVS_PRED_BACKWARD &&
+               forward->valid == 0U && backward->valid != 0U) {
+        syntax_partition->mode = CAVS_BROADCAST_MOTION_BACKWARD;
+    } else if (partition->direction == CAVS_PRED_SYMMETRIC &&
+               forward->valid != 0U && backward->valid == 0U) {
+        syntax_partition->mode = CAVS_BROADCAST_MOTION_SYMMETRIC;
+    } else if (partition->direction == CAVS_PRED_BIDIRECTIONAL &&
+               forward->valid != 0U && backward->valid != 0U) {
+        syntax_partition->mode = CAVS_BROADCAST_MOTION_BIDIRECTIONAL;
+    } else if (macroblock->type == CAVS_MB_B_INTER &&
+               partition->direction == CAVS_PRED_BIDIRECTIONAL &&
+               forward->valid == 0U && backward->valid == 0U &&
+               partition->width == 8U && partition->height == 8U) {
+        syntax_partition->mode = CAVS_BROADCAST_MOTION_DIRECT;
+    } else {
+        return CAVS_ERR_CORRUPT_BITSTREAM;
+    }
+    return CAVS_OK;
+}
+
+/* Normalizes skip/direct geometry emitted without coded motion fields. */
+static cavs_result picture_motion_syntax(
+    const cavs_macroblock *macroblock,
+    cavs_broadcast_motion_syntax *syntax) {
+    unsigned index;
+    memset(syntax, 0, sizeof(*syntax));
+    syntax->type = macroblock->type;
+    if (macroblock->is_intra != 0U || macroblock->type == CAVS_MB_I_8X8 ||
+        macroblock->type >= CAVS_MB_INVALID)
+        return CAVS_ERR_INVALID_STATE;
+    if (macroblock->type == CAVS_MB_P_SKIP) {
+        if (macroblock->partition_count > 1U ||
+            (macroblock->partition_count == 1U &&
+             (macroblock->partition[0].x != 0U ||
+              macroblock->partition[0].y != 0U ||
+              macroblock->partition[0].width != 16U ||
+              macroblock->partition[0].height != 16U)))
+            return CAVS_ERR_CORRUPT_BITSTREAM;
+        syntax->partition_count = 1U;
+        syntax->partition[0].width = 16U;
+        syntax->partition[0].height = 16U;
+        syntax->partition[0].mode = CAVS_BROADCAST_MOTION_FORWARD;
+        return CAVS_OK;
+    }
+    if (macroblock->type == CAVS_MB_B_SKIP ||
+        macroblock->type == CAVS_MB_B_DIRECT) {
+        if (macroblock->partition_count != 0U &&
+            macroblock->partition_count != 1U &&
+            macroblock->partition_count != 4U)
+            return CAVS_ERR_CORRUPT_BITSTREAM;
+        if (macroblock->partition_count == 1U &&
+            (macroblock->partition[0].x != 0U ||
+             macroblock->partition[0].y != 0U ||
+             macroblock->partition[0].width != 16U ||
+             macroblock->partition[0].height != 16U))
+            return CAVS_ERR_CORRUPT_BITSTREAM;
+        if (macroblock->partition_count == 4U) {
+            for (index = 0U; index < 4U; ++index) {
+                const cavs_mb_partition *partition =
+                    &macroblock->partition[index];
+                if (partition->x != (uint8_t)((index & 1U) * 8U) ||
+                    partition->y != (uint8_t)((index >> 1U) * 8U) ||
+                    partition->width != 8U || partition->height != 8U)
+                    return CAVS_ERR_CORRUPT_BITSTREAM;
+            }
+        }
+        syntax->partition_count = 4U;
+        for (index = 0U; index < 4U; ++index) {
+            syntax->partition[index].x = (uint8_t)((index & 1U) * 8U);
+            syntax->partition[index].y = (uint8_t)((index >> 1U) * 8U);
+            syntax->partition[index].width = 8U;
+            syntax->partition[index].height = 8U;
+            syntax->partition[index].mode = CAVS_BROADCAST_MOTION_DIRECT;
+        }
+        return CAVS_OK;
+    }
+    if (macroblock->partition_count == 0U ||
+        macroblock->partition_count > CAVS_MAX_MB_PARTITIONS)
+        return CAVS_ERR_CORRUPT_BITSTREAM;
+    syntax->partition_count = macroblock->partition_count;
+    for (index = 0U; index < syntax->partition_count; ++index) {
+        cavs_result result = picture_partition_syntax(
+            macroblock, index, &syntax->partition[index]);
+        if (result != CAVS_OK) return result;
+    }
+    return CAVS_OK;
+}
+
+cavs_result cavs_assemble_broadcast_picture_macroblock_motion(
+    const cavs_broadcast_motion_context *context,
+    const cavs_picture *picture, const cavs_macroblock *entropy_macroblock,
+    cavs_macroblock *macroblock) {
+    cavs_picture_motion_geometry geometry;
+    cavs_broadcast_motion_syntax syntax;
+    cavs_macroblock assembled;
+    unsigned partition_index;
+    cavs_result result;
+    if (context == NULL || picture == NULL || entropy_macroblock == NULL ||
+        macroblock == NULL)
+        return CAVS_ERR_INVALID_ARGUMENT;
+    result = picture_motion_geometry(context, picture, entropy_macroblock,
+                                     &geometry);
+    if (result != CAVS_OK) return result;
+    result = picture_motion_syntax(entropy_macroblock, &syntax);
+    if (result != CAVS_OK) return result;
+    result = validate_context(context, &syntax);
+    if (result != CAVS_OK) return result;
+    for (partition_index = 0U;
+         partition_index < syntax.partition_count; ++partition_index) {
+        cavs_broadcast_motion_partition *partition =
+            &syntax.partition[partition_index];
+        int64_t x0 = (int64_t)entropy_macroblock->column * 16 + partition->x;
+        int64_t local_row = context->picture_structure == 0U ?
+            (int64_t)(entropy_macroblock->row % geometry.field_rows) :
+            entropy_macroblock->row;
+        int64_t y0 = local_row * 16 * geometry.vertical_step +
+                     geometry.field_parity +
+                     (int64_t)partition->y * geometry.vertical_step;
+        int64_t x1 = x0 + partition->width - 1;
+        int64_t sample_x[CAVS_MOTION_NEIGHBOR_COUNT];
+        int64_t sample_y[CAVS_MOTION_NEIGHBOR_COUNT];
+        unsigned direction;
+        unsigned neighbor;
+        sample_x[CAVS_MOTION_NEIGHBOR_A] = x0 - 1;
+        sample_y[CAVS_MOTION_NEIGHBOR_A] = y0;
+        sample_x[CAVS_MOTION_NEIGHBOR_B] = x0;
+        sample_y[CAVS_MOTION_NEIGHBOR_B] =
+            y0 - geometry.vertical_step;
+        sample_x[CAVS_MOTION_NEIGHBOR_C] = x1 + 1;
+        sample_y[CAVS_MOTION_NEIGHBOR_C] =
+            y0 - geometry.vertical_step;
+        sample_x[CAVS_MOTION_NEIGHBOR_D] = x0 - 1;
+        sample_y[CAVS_MOTION_NEIGHBOR_D] =
+            y0 - geometry.vertical_step;
+        for (direction = 0U; direction < CAVS_MB_DIRECTIONS; ++direction) {
+            for (neighbor = 0U; neighbor < CAVS_MOTION_NEIGHBOR_COUNT;
+                 ++neighbor) {
+                result = picture_candidate_at(
+                    context, picture, entropy_macroblock, &syntax, &geometry,
+                    partition_index, direction, sample_x[neighbor],
+                    sample_y[neighbor],
+                    &partition->candidate[direction][neighbor]);
+                if (result != CAVS_OK) return result;
+            }
+        }
+    }
+    assembled = *entropy_macroblock;
+    result = cavs_assemble_broadcast_macroblock_motion(
+        context, &syntax, &assembled);
+    if (result != CAVS_OK) return result;
     *macroblock = assembled;
     return CAVS_OK;
 }

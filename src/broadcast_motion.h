@@ -100,6 +100,21 @@ cavs_result cavs_assemble_broadcast_macroblock_motion(
     cavs_macroblock *macroblock);
 
 /*
+ * GB/T 20090.16-2016 9.4.3 and 9.4.6, Figures 11-12 and Table 58:
+ * (1) validate the entropy macroblock against frozen picture coordinates;
+ * (2) map its direction, reference-index, and MVD fields to motion syntax;
+ * (3) acquire A/B/C/D only from earlier same-field, same-slice blocks;
+ * (4) preserve earlier partitions of this macroblock as local candidates;
+ * (5) atomically derive and write the normalized unified motion metadata.
+ * This picture-storage adapter introduces no additional prediction mode.
+ */
+cavs_result cavs_assemble_broadcast_picture_macroblock_motion(
+    const cavs_broadcast_motion_context *context,
+    const struct cavs_picture *picture,
+    const cavs_macroblock *entropy_macroblock,
+    cavs_macroblock *macroblock);
+
+/*
  * GB/T 20090.16-2016 9.9.2 and Table 63:
  * (1) expose the selected frame or physical field reference plane;
  * (2) interpolate each unified luma/chroma partition from its motion vector;
