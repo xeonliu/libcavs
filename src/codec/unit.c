@@ -5,6 +5,7 @@
 #include "codec/unit.h"
 #include "codec/pseudo_start_code.h"
 
+/* Removes pseudo-start-code insertions as specified by normative Annex A of GB/T 20090.2-2013 and GB/T 20090.16-2016. */
 static cavs_result unescape(
     const cavs_decoder_config *config, const uint8_t *data, size_t size,
     cavs_unit_payload *payload) {

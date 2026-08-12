@@ -67,7 +67,12 @@ int cavs_broadcast_picture_supported(
         advanced_entropy != 0U && weighting_quant == 0U;
 }
 
-/* The currently parsed 0x48 profile uses quarter-sample luma motion. */
+/*
+ * GB/T 20090.2-2013 9.10.2 and GB/T 20090.16-2016 9.9.2 use quarter-sample
+ * luma motion for the currently supported profiles. Eighth-sample motion is
+ * selected only by profiles whose explicit advanced-subpixel syntax has been
+ * parsed; those profiles are outside the current sequence parser.
+ */
 static cavs_result broadcast_motion_profile_capability(
     const cavs_sequence_info *sequence,
     cavs_motion_profile_capability *capability) {

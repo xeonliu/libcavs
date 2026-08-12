@@ -2,7 +2,8 @@
  * Copyright (c) 2026 libcavs contributors
  * SPDX-License-Identifier: BSD-3-Clause
  *
- * Baseline-profile 8x8 intra prediction and sample reconstruction.
+ * Baseline-profile 8x8 intra prediction from GB/T 20090.2-2013
+ * 9.9.1-9.9.4, Tables 65-66, and Figure 20.
  */
 #ifndef CAVS_PREDICTION_H
 #define CAVS_PREDICTION_H

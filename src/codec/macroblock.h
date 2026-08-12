@@ -45,6 +45,12 @@ typedef struct cavs_motion_vector {
     int32_t y;
     int8_t reference_index;
     uint8_t valid;
+    /*
+     * GB/T 20090.16-2016 9.6.1 and 9.9.1 b) require Direct prediction to
+     * recover DistanceIndexRef and the physical field selected by a stored
+     * co-located P motion vector. reference_index is local to the P field's
+     * decode-time list, so the resolved identity is frozen with the vector.
+     */
     uint16_t reference_distance_index;
     uint8_t reference_field;
     uint8_t reference_identity_valid;
@@ -59,6 +65,12 @@ typedef struct cavs_mb_partition {
     cavs_motion_vector motion[CAVS_MB_DIRECTIONS];
 } cavs_mb_partition;
 
+/*
+ * Unified decoded macroblock contract. GB/T 20090.16-2016 7.5-7.6 and
+ * 9.2-9.6 define syntax through residual decoding; GB/T 20090.2-2013 uses
+ * the same reconstruction-facing representation for shared tools. Storage
+ * and indexing fields do not introduce codec decisions.
+ */
 typedef struct cavs_macroblock {
     uint32_t address;
     uint16_t row;

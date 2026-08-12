@@ -2,7 +2,9 @@
  * Copyright (c) 2026 libcavs contributors
  * SPDX-License-Identifier: BSD-3-Clause
  *
- * Basic-entropy transform coefficient decoding.
+ * Basic-entropy coefficient decoding, inverse scan, QP mapping, and inverse
+ * quantization from GB/T 20090.2-2013 8.3.1, 9.5.1.2, 9.5.3, 9.7.1-9.7.2,
+ * Figures 33-34, Table 70, and normative Annex D Tables D.1-D.20.
  */
 #ifndef CAVS_COEFFICIENTS_H
 #define CAVS_COEFFICIENTS_H

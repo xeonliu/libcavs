@@ -3,7 +3,8 @@
  * SPDX-License-Identifier: BSD-3-Clause
  *
  * GB/T 20090.2-2013, 信息技术 先进音视频编码 第2部分: 视频,
- * 8.3.1, 9.5.1.2, 9.5.3, and normative Annex D Tables D.1-D.20.
+ * 8.3.1, 9.5.1.2, 9.5.3, 9.7.1-9.7.2, Figures 33-34, Table 70,
+ * and normative Annex D Tables D.1-D.20.
  */
 #include "codec/coefficients.h"
 #include "bitreader.h"

@@ -2,7 +2,8 @@
  * Copyright (c) 2026 libcavs contributors
  * SPDX-License-Identifier: BSD-3-Clause
  *
- * Scalar inverse-transform kernels from GB/T 20090.2-2013 9.8.2-9.8.3.
+ * Scalar inverse-transform kernels from GB/T 20090.2-2013 9.8.2-9.8.3
+ * and Table 71.
  */
 #ifndef CAVS_RECONSTRUCTION_H
 #define CAVS_RECONSTRUCTION_H

@@ -48,7 +48,10 @@ static uint8_t predicted_luma_mode(const cavs_baseline_decode_context *context,
     return 2U;
 }
 
-/* Resolves the coded 2-bit luma mode against 9.4.4's predicted mode. */
+/*
+ * Resolves the coded 2-bit luma mode against the prediction defined by
+ * GB/T 20090.2-2013 9.4.4.
+ */
 static cavs_result resolved_luma_mode(const cavs_baseline420_mb_header *header,
                                       unsigned index, uint8_t predicted,
                                       uint8_t *mode) {
