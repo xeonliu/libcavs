@@ -246,10 +246,21 @@ int main(int argc, char **argv) {
         } else {
             fprintf(stderr, "unit %lu (start code 0x%02x): %s\n", units + skipped + 1U,
                     packet.data[3], cavs_strerror(result));
-            cavs_decoder_destroy(decoder);
-            if (state.output != NULL && state.output != stdout) fclose(state.output);
-            free(data);
-            return 1;
+            failed = 1;
+            /*
+             * A terminal truncated NAL has already been rejected by the
+             * public API. Still reach EOF flush so a partial current picture
+             * is discarded and previously completed delayed pictures drain.
+             * A bad unit before another start code remains a hard stop.
+             */
+            if (next != size) {
+                cavs_decoder_destroy(decoder);
+                if (state.output != NULL && state.output != stdout)
+                    fclose(state.output);
+                free(data);
+                return 1;
+            }
+            break;
         }
         start = next;
     }

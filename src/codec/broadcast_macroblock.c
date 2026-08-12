@@ -130,22 +130,17 @@ cavs_result cavs_broadcast_decode_skip_run(
 
 cavs_result cavs_broadcast_slice_finish(
     const cavs_broadcast_slice_decoder *decoder) {
-    size_t offset;
-    size_t remaining;
     if (decoder == NULL) return CAVS_ERR_INVALID_ARGUMENT;
+    /*
+     * GB/T 20090.16-2016 7.4.14 and 8.4 define the value-one
+     * aec_mb_stuffing_bit of the last macroblock as the slice terminator.
+     * Source bits not shifted into value_s/value_t after that bin are part of
+     * arithmetic-code finalization, not byte-aligned zero padding syntax.
+     */
     if (decoder->has_stuffing_bit == 0U ||
         decoder->last_stuffing_bit != 1U ||
         decoder->arithmetic.bit_offset > decoder->arithmetic.bit_size)
         return CAVS_ERR_CORRUPT_BITSTREAM;
-    remaining = decoder->arithmetic.bit_size - decoder->arithmetic.bit_offset;
-    if (remaining > 8U) return CAVS_ERR_CORRUPT_BITSTREAM;
-    for (offset = decoder->arithmetic.bit_offset;
-         offset < decoder->arithmetic.bit_size; ++offset) {
-        if (((decoder->arithmetic.data[offset / 8U] >>
-              (7U - offset % 8U)) & UINT8_C(1)) != 0U &&
-            offset != decoder->arithmetic.bit_offset)
-            return CAVS_ERR_CORRUPT_BITSTREAM;
-    }
     return CAVS_EOF;
 }
 

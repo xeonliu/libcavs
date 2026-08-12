@@ -54,9 +54,9 @@ cavs_result cavs_broadcast_decode_skip_run(
     uint32_t *skip_run);
 
 /*
- * GB/T 20090.16-2016 7.4 requires the last macroblock stuffing bit in a
- * completed advanced-entropy slice to equal one. At most one trailing byte is
- * accepted; it is either zero padding or a leading stop bit followed by zero.
+ * GB/T 20090.16-2016 7.4.14 and 8.4 require the last macroblock stuffing bin
+ * in a slice to equal one. Remaining unshifted source bits belong to arithmetic
+ * finalization and are not interpreted as byte-aligned padding syntax.
  */
 cavs_result cavs_broadcast_slice_finish(
     const cavs_broadcast_slice_decoder *decoder);
