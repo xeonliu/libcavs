@@ -23,7 +23,7 @@ static int motion_range(cavs_luma_motion_precision precision,
     return 0;
 }
 
-static int vector_in_range(cavs_motion_vector vector,
+static int vector_in_range(cavs_luma_motion_vector vector,
                            int32_t minimum, int32_t maximum) {
     return vector.x >= minimum && vector.x <= maximum &&
            vector.y >= minimum && vector.y <= maximum;
@@ -67,16 +67,17 @@ static int scale_component(int32_t component, uint16_t source_distance,
     return 1;
 }
 
-static int scale_vector(cavs_motion_vector vector, uint16_t source_distance,
-                        uint16_t target_distance, cavs_motion_vector *scaled) {
+static int scale_vector(cavs_luma_motion_vector vector,
+                        uint16_t source_distance, uint16_t target_distance,
+                        cavs_luma_motion_vector *scaled) {
     return scale_component(vector.x, source_distance, target_distance,
                            &scaled->x) &&
            scale_component(vector.y, source_distance, target_distance,
                            &scaled->y);
 }
 
-static uint32_t vector_distance(cavs_motion_vector first,
-                                cavs_motion_vector second) {
+static uint32_t vector_distance(cavs_luma_motion_vector first,
+                                cavs_luma_motion_vector second) {
     int64_t dx = (int64_t)first.x - second.x;
     int64_t dy = (int64_t)first.y - second.y;
     uint64_t distance = (uint64_t)(dx < 0 ? -dx : dx) +
@@ -98,10 +99,11 @@ cavs_result cavs_predict_luma_motion(
     const cavs_motion_candidate candidates[CAVS_MOTION_NEIGHBOR_COUNT],
     int8_t current_reference_index, uint16_t current_block_distance,
     cavs_motion_partition_position partition,
-    cavs_luma_motion_precision precision, cavs_motion_vector *prediction) {
+    cavs_luma_motion_precision precision,
+    cavs_luma_motion_vector *prediction) {
     cavs_motion_candidate neighbor[CAVS_MOTION_NEIGHBOR_COUNT];
-    cavs_motion_vector scaled[3];
-    cavs_motion_vector result;
+    cavs_luma_motion_vector scaled[3];
+    cavs_luma_motion_vector result;
     int32_t minimum;
     int32_t maximum;
     unsigned active = 0U;
@@ -177,9 +179,10 @@ cavs_result cavs_predict_luma_motion(
 }
 
 cavs_result cavs_decode_luma_motion(
-    const cavs_motion_vector *prediction, const cavs_motion_vector *difference,
-    cavs_luma_motion_precision precision, cavs_motion_vector *motion) {
-    cavs_motion_vector decoded;
+    const cavs_luma_motion_vector *prediction,
+    const cavs_luma_motion_vector *difference,
+    cavs_luma_motion_precision precision, cavs_luma_motion_vector *motion) {
+    cavs_luma_motion_vector decoded;
     int32_t minimum;
     int32_t maximum;
     int64_t x;
@@ -201,8 +204,8 @@ cavs_result cavs_decode_luma_motion(
 cavs_result cavs_derive_p_skip_motion(
     const cavs_motion_candidate candidates[CAVS_MOTION_NEIGHBOR_COUNT],
     uint16_t default_block_distance, cavs_luma_motion_precision precision,
-    cavs_motion_vector *motion) {
-    cavs_motion_vector derived;
+    cavs_luma_motion_vector *motion) {
+    cavs_luma_motion_vector derived;
     cavs_motion_candidate neighbor_a;
     cavs_motion_candidate neighbor_b;
     int32_t minimum;
@@ -261,7 +264,7 @@ static int derive_symmetric_component(int32_t forward,
 }
 
 cavs_result cavs_derive_symmetric_motion(
-    const cavs_motion_vector *forward, int8_t forward_reference_index,
+    const cavs_luma_motion_vector *forward, int8_t forward_reference_index,
     uint8_t picture_structure, uint16_t forward_block_distance,
     uint16_t backward_block_distance, cavs_luma_motion_precision precision,
     cavs_bidirectional_motion *motion) {
@@ -312,13 +315,14 @@ static int derive_direct_component(int32_t colocated, uint16_t distance,
 }
 
 cavs_result cavs_derive_direct_motion(
-    const cavs_motion_vector *colocated, int8_t forward_reference_index,
+    const cavs_luma_motion_vector *colocated,
+    int8_t forward_reference_index,
     int8_t backward_reference_index, uint8_t current_picture_structure,
     uint8_t colocated_picture_structure, uint16_t colocated_block_distance,
     uint16_t forward_block_distance, uint16_t backward_block_distance,
     cavs_luma_motion_precision precision, cavs_bidirectional_motion *motion) {
     cavs_bidirectional_motion derived;
-    cavs_motion_vector adjusted;
+    cavs_luma_motion_vector adjusted;
     int32_t minimum;
     int32_t maximum;
     if (colocated == NULL || motion == NULL ||

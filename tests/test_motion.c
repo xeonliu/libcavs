@@ -55,7 +55,7 @@ static void clear_motion_candidates(
 
 static void test_motion_prediction_normalization(void) {
     cavs_motion_candidate candidates[CAVS_MOTION_NEIGHBOR_COUNT];
-    cavs_motion_vector prediction;
+    cavs_luma_motion_vector prediction;
     clear_motion_candidates(candidates);
     candidates[CAVS_MOTION_NEIGHBOR_A] = motion_candidate(7, -9, 3U, 0);
     TEST_CHECK(cavs_predict_luma_motion(
@@ -89,7 +89,7 @@ static void test_motion_prediction_normalization(void) {
 
 static void test_motion_prediction_partition_shortcuts(void) {
     cavs_motion_candidate candidates[CAVS_MOTION_NEIGHBOR_COUNT];
-    cavs_motion_vector prediction;
+    cavs_luma_motion_vector prediction;
     clear_motion_candidates(candidates);
     candidates[0] = motion_candidate(1, 11, 1U, 2);
     candidates[1] = motion_candidate(2, 12, 1U, 2);
@@ -123,7 +123,7 @@ static void set_median_candidates(
 
 static void test_motion_prediction_median_selection(void) {
     cavs_motion_candidate candidates[CAVS_MOTION_NEIGHBOR_COUNT];
-    cavs_motion_vector prediction;
+    cavs_luma_motion_vector prediction;
     set_median_candidates(candidates, 0, 10, 15);
     TEST_CHECK(cavs_predict_luma_motion(
                candidates, 0, 1U, CAVS_MOTION_PARTITION_OTHER,
@@ -143,7 +143,7 @@ static void test_motion_prediction_median_selection(void) {
 
 static void test_motion_prediction_scaling(void) {
     cavs_motion_candidate candidates[CAVS_MOTION_NEIGHBOR_COUNT];
-    cavs_motion_vector prediction;
+    cavs_luma_motion_vector prediction;
     clear_motion_candidates(candidates);
     candidates[0] = motion_candidate(10, -11, 2U, 0);
     candidates[1] = motion_candidate(40, -44, 4U, 0);
@@ -165,9 +165,9 @@ static void test_motion_prediction_scaling(void) {
 }
 
 static void test_motion_difference_decoding(void) {
-    cavs_motion_vector prediction = {4000, -4000};
-    cavs_motion_vector difference = {95, -96};
-    cavs_motion_vector decoded = {77, 88};
+    cavs_luma_motion_vector prediction = {4000, -4000};
+    cavs_luma_motion_vector difference = {95, -96};
+    cavs_luma_motion_vector decoded = {77, 88};
     TEST_CHECK(cavs_decode_luma_motion(
                &prediction, &difference, CAVS_LUMA_MOTION_QUARTER,
                &decoded) == CAVS_OK);
@@ -199,7 +199,7 @@ static void test_motion_difference_decoding(void) {
 
 static void test_motion_prediction_invalid(void) {
     cavs_motion_candidate candidates[CAVS_MOTION_NEIGHBOR_COUNT];
-    cavs_motion_vector prediction = {77, 88};
+    cavs_luma_motion_vector prediction = {77, 88};
     clear_motion_candidates(candidates);
     candidates[0] = motion_candidate(1, 2, 0U, 0);
     TEST_CHECK(cavs_predict_luma_motion(
@@ -245,7 +245,7 @@ static void test_motion_prediction_invalid(void) {
 
 static void test_p_skip_motion(void) {
     cavs_motion_candidate candidates[CAVS_MOTION_NEIGHBOR_COUNT];
-    cavs_motion_vector motion = {77, 88};
+    cavs_luma_motion_vector motion = {77, 88};
     clear_motion_candidates(candidates);
     candidates[0] = motion_candidate(4, 8, 2U, 0);
     candidates[1] = motion_candidate(8, 16, 4U, 0);
@@ -283,7 +283,7 @@ static void test_p_skip_motion(void) {
 }
 
 static void test_symmetric_motion(void) {
-    cavs_motion_vector forward = {3, -3};
+    cavs_luma_motion_vector forward = {3, -3};
     cavs_bidirectional_motion motion;
     cavs_bidirectional_motion unchanged;
     memset(&motion, 0xa5, sizeof(motion));
@@ -317,7 +317,7 @@ static void test_symmetric_motion(void) {
 }
 
 static void test_direct_motion(void) {
-    cavs_motion_vector colocated = {3, -3};
+    cavs_luma_motion_vector colocated = {3, -3};
     cavs_bidirectional_motion motion;
     cavs_bidirectional_motion unchanged;
     memset(&motion, 0, sizeof(motion));

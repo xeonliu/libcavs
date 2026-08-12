@@ -89,9 +89,9 @@ int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
         uint8_t reconstructed[64];
         uint8_t motion_prediction[64];
         cavs_motion_candidate motion_candidates[CAVS_MOTION_NEIGHBOR_COUNT];
-        cavs_motion_vector predicted_motion = {0, 0};
-        cavs_motion_vector difference_motion;
-        cavs_motion_vector decoded_motion;
+        cavs_luma_motion_vector predicted_motion = {0, 0};
+        cavs_luma_motion_vector difference_motion;
+        cavs_luma_motion_vector decoded_motion;
         cavs_bidirectional_motion bidirectional_motion;
         uint8_t weights[64];
         unsigned index;
