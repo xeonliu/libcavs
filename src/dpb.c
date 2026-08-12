@@ -315,56 +315,6 @@ cavs_result cavs_dpb_select_reference(
     return CAVS_OK;
 }
 
-cavs_result cavs_dpb_colocated_macroblock(
-    const cavs_dpb *dpb, uint8_t direction, uint8_t reference_index,
-    uint8_t field, uint32_t sample_x, uint32_t sample_y,
-    cavs_dpb_reference *reference, const cavs_macroblock **macroblock,
-    uint8_t *block_index) {
-    cavs_dpb_reference selected;
-    size_t row;
-    size_t column;
-    size_t local_y;
-    size_t address;
-    uint8_t metadata_field;
-    cavs_result result;
-    if (reference == NULL || macroblock == NULL || block_index == NULL)
-        return CAVS_ERR_INVALID_ARGUMENT;
-    result = cavs_dpb_select_reference_entry(
-        dpb, direction, reference_index, field, &selected);
-    if (result != CAVS_OK) return result;
-    if (sample_x >= selected.picture->coded_width ||
-        sample_y >= selected.picture->coded_height)
-        return CAVS_ERR_INVALID_ARGUMENT;
-    column = sample_x / 16U;
-    if (selected.picture->field_picture == 0U) {
-        local_y = sample_y;
-        row = local_y / 16U;
-    } else {
-        size_t field_rows = selected.picture->macroblock_height / 2U;
-        size_t ordinal;
-        metadata_field = selected.field;
-        if (metadata_field == CAVS_FIELD_BOTH)
-            metadata_field = (sample_y & 1U) == 0U ? CAVS_FIELD_TOP :
-                                                    CAVS_FIELD_BOTTOM;
-        ordinal = metadata_field ==
-            first_display_field(selected.picture) ? 0U : 1U;
-        local_y = sample_y / 2U;
-        row = ordinal * field_rows + local_y / 16U;
-    }
-    if (row >= selected.picture->macroblock_height ||
-        column >= selected.picture->macroblock_width)
-        return CAVS_ERR_MISSING_REFERENCE;
-    address = row * selected.picture->macroblock_width + column;
-    if (address >= selected.picture->macroblock_count ||
-        selected.picture->macroblocks[address].end_bit_offset == 0U)
-        return CAVS_ERR_MISSING_REFERENCE;
-    *reference = selected;
-    *macroblock = &selected.picture->macroblocks[address];
-    *block_index = (uint8_t)(((local_y & 15U) >= 8U ? 2U : 0U) +
-                             ((sample_x & 15U) >= 8U ? 1U : 0U));
-    return CAVS_OK;
-}
-
 /* Adds current reference picture and retains no more than two pictures. */
 static void update_references(cavs_dpb *dpb, cavs_picture *picture) {
     cavs_dpb_reference updated[CAVS_DPB_MAX_REFERENCES];

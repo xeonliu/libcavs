@@ -18,12 +18,42 @@ function(libcavs_enable_warnings target)
   endif()
 endfunction()
 
-set(LIBCAVS_SOURCES src/decoder.c src/bitreader.c src/safe.c
-  src/pseudo_start_code.c src/syntax.c src/macroblock.c src/coefficients.c
-  src/reconstruction.c src/prediction.c src/motion.c src/image.c
-  src/advanced_entropy.c src/broadcast_macroblock.c src/broadcast_motion.c
-  src/broadcast_reconstruction.c src/slice_decode.c src/loop_filter.c
-  src/dpb.c)
+set(LIBCAVS_CORE_SOURCES
+  src/decoder.c
+  src/picture_pipeline.c
+  src/frame.c
+  src/picture.c
+  src/dpb.c
+  src/bitreader.c
+  src/safe.c)
+
+set(LIBCAVS_CODEC_SOURCES
+  src/codec/advanced_entropy.c
+  src/codec/baseline_decode.c
+  src/codec/unit.c
+  src/codec/baseline_macroblock.c
+  src/codec/broadcast_macroblock.c
+  src/codec/broadcast_decode.c
+  src/codec/broadcast_motion.c
+  src/codec/broadcast_reconstruction.c
+  src/codec/coefficients.c
+  src/codec/loop_filter.c
+  src/codec/motion.c
+  src/codec/pseudo_start_code.c
+  src/codec/slice_decode.c
+  src/codec/syntax.c)
+
+set(LIBCAVS_DSP_SOURCES
+  src/dsp/loop_filter.c
+  src/dsp/motion_compensation.c
+  src/dsp/prediction.c
+  src/dsp/reconstruction.c
+  src/dsp/transform.c)
+
+set(LIBCAVS_SOURCES
+  ${LIBCAVS_CORE_SOURCES}
+  ${LIBCAVS_CODEC_SOURCES}
+  ${LIBCAVS_DSP_SOURCES})
 
 add_library(cavs_static STATIC ${LIBCAVS_SOURCES})
 add_library(cavs::static ALIAS cavs_static)
@@ -34,6 +64,7 @@ set_target_properties(cavs_static PROPERTIES
 target_include_directories(cavs_static PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
   $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>)
+target_include_directories(cavs_static PRIVATE src)
 target_compile_features(cavs_static PUBLIC c_std_99)
 libcavs_enable_warnings(cavs_static)
 
@@ -50,24 +81,39 @@ if(LIBCAVS_BUILD_SHARED)
   target_include_directories(cavs_shared PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
     $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>)
+  target_include_directories(cavs_shared PRIVATE src)
   target_compile_features(cavs_shared PUBLIC c_std_99)
   libcavs_enable_warnings(cavs_shared)
 endif()
 
 if(LIBCAVS_BUILD_TESTS)
   enable_testing()
-  add_executable(cavs_unit tests/test_bitreader.c tests/test_syntax.c
-    tests/test_macroblock.c src/bitreader.c src/safe.c
-    tests/test_coefficients.c src/pseudo_start_code.c src/syntax.c
-    tests/test_reconstruction.c src/macroblock.c src/coefficients.c
-    tests/test_prediction.c tests/test_motion.c src/reconstruction.c
-    src/prediction.c src/motion.c)
-  target_include_directories(cavs_unit PRIVATE src include)
+  add_library(cavs_test_internal STATIC ${LIBCAVS_SOURCES})
+  target_include_directories(cavs_test_internal PUBLIC include src)
+  target_compile_definitions(cavs_test_internal PRIVATE CAVS_TESTING)
+  target_compile_features(cavs_test_internal PUBLIC c_std_99)
+  libcavs_enable_warnings(cavs_test_internal)
+
+  add_executable(cavs_unit
+    tests/unit/test_bitreader.c
+    tests/unit/test_syntax.c
+    tests/unit/test_macroblock.c
+    tests/unit/test_coefficients.c
+    tests/unit/test_reconstruction.c
+    tests/unit/test_prediction.c
+    tests/unit/test_motion.c
+    tests/unit/test_frame.c
+    tests/unit/test_dpb.c
+    tests/unit/test_slice_decode.c
+    tests/unit/test_loop_filter.c)
+  target_include_directories(cavs_unit PRIVATE src include tests)
+  target_link_libraries(cavs_unit PRIVATE cavs_test_internal)
   target_compile_definitions(cavs_unit PRIVATE CAVS_TESTING)
   target_compile_features(cavs_unit PRIVATE c_std_99)
   libcavs_enable_warnings(cavs_unit)
   add_test(NAME cavs_unit COMMAND cavs_unit)
-  add_executable(cavs_api_test tests/test_api.c)
+  add_executable(cavs_api_test tests/integration/test_api.c)
+  target_include_directories(cavs_api_test PRIVATE tests)
   target_link_libraries(cavs_api_test PRIVATE cavs_static)
   target_compile_features(cavs_api_test PRIVATE c_std_99)
   libcavs_enable_warnings(cavs_api_test)

@@ -7,7 +7,7 @@
 #ifndef CAVS_DPB_H
 #define CAVS_DPB_H
 
-#include "image.h"
+#include "picture.h"
 #include <stddef.h>
 #include <stdint.h>
 
@@ -87,16 +87,6 @@ cavs_result cavs_dpb_select_reference_entry(
 cavs_result cavs_dpb_select_reference(
     const cavs_dpb *dpb, uint8_t direction, uint8_t reference_index,
     uint8_t field, cavs_picture **picture);
-
-/*
- * Returns co-located macroblock metadata at a luma frame-sample position.
- * block_index is the 8x8 luma block index within that macroblock.
- */
-cavs_result cavs_dpb_colocated_macroblock(
-    const cavs_dpb *dpb, uint8_t direction, uint8_t reference_index,
-    uint8_t field, uint32_t sample_x, uint32_t sample_y,
-    cavs_dpb_reference *reference, const cavs_macroblock **macroblock,
-    uint8_t *block_index);
 
 cavs_result cavs_dpb_store(cavs_dpb *dpb, cavs_picture *picture);
 /* Transfers the DPB-owned output reference to the caller on success. */

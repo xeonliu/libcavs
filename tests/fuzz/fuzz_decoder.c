@@ -5,11 +5,13 @@
  * Public-API and baseline macroblock fuzz entry point.
  */
 #include <cavs/cavs.h>
-#include "coefficients.h"
-#include "macroblock.h"
-#include "motion.h"
-#include "prediction.h"
-#include "reconstruction.h"
+#include "codec/coefficients.h"
+#include "codec/baseline_macroblock.h"
+#include "codec/motion.h"
+#include "dsp/motion_compensation.h"
+#include "dsp/prediction.h"
+#include "dsp/reconstruction.h"
+#include "dsp/transform.h"
 #include <stddef.h>
 #include <stdint.h>
 #include <stdlib.h>
@@ -105,7 +107,7 @@ int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
             quant, (cavs_scan_mode_8x8)(data[0] & 1U), matrix);
         (void)cavs_inverse_quantize_8x8(
             matrix, predicted, weights, data[0] & 63U, quant);
-        (void)cavs_inverse_transform_8x8(quant, residual);
+        (void)cavs_dsp_inverse_transform_8x8_c(quant, residual);
         memset(&references, 0, sizeof(references));
         references.top_available = UINT32_C(0x1ffff);
         references.left_available = UINT32_C(0x1ffff);
@@ -172,24 +174,24 @@ int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
         (void)cavs_acquire_intra_references_8x8(
             reference_plane, 16U, 16U, 16U, 8U, 8U,
             &availability, &references);
-        (void)cavs_predict_intra_luma_8x8(
+        (void)cavs_dsp_predict_intra_luma_8x8_c(
             &references, (cavs_intra_luma_mode_8x8)(data[0] % 5U), prediction);
-        (void)cavs_predict_intra_chroma_8x8(
+        (void)cavs_dsp_predict_intra_chroma_8x8_c(
             &references, (cavs_intra_chroma_mode_8x8)(data[0] % 4U), prediction);
-        (void)cavs_reconstruct_samples_8x8(
+        (void)cavs_dsp_reconstruct_samples_8x8_c(
             prediction, data[0] & 1U ? prediction : NULL,
             residual, reconstructed);
-        (void)cavs_interpolate_chroma_block(
+        (void)cavs_dsp_interpolate_chroma_block_c(
             reference_plane, 16U, 16U, 16U, 4U, 4U, 8U, 8U,
             (int8_t)data[0], (int8_t)data[size - 1U],
             data[0] & 1U ? CAVS_CHROMA_MOTION_EIGHTH
                          : CAVS_CHROMA_MOTION_SIXTEENTH,
             motion_prediction, 8U);
-        (void)cavs_interpolate_luma_block_quarter(
+        (void)cavs_dsp_interpolate_luma_block_quarter_c(
             reference_plane, 16U, 16U, 16U, 0U, 0U, 16U, 16U,
             (int8_t)data[0], (int8_t)data[size - 1U],
             reference_plane, 16U);
-        (void)cavs_interpolate_luma_block_eighth(
+        (void)cavs_dsp_interpolate_luma_block_eighth_c(
             reference_plane, 16U, 16U, 16U, 0U, 0U, 16U, 16U,
             (int8_t)data[size - 1U], (int8_t)data[0],
             reference_plane, 16U);
