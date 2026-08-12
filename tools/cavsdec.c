@@ -242,6 +242,7 @@ int main(int argc, char **argv) {
                 failed = 1;
                 break;
             }
+            start = next;
             continue;
         } else {
             fprintf(stderr, "unit %lu (start code 0x%02x): %s\n", units + skipped + 1U,
