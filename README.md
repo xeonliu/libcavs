@@ -49,6 +49,16 @@ The sample is YUV420 at 720x576 and 25 fps. Its final Broadcast picture is
 incomplete; the decoder still writes the preceding complete frames, while
 the final output may report a truncated trailing picture.
 
+## Performance
+
+
+Throughput (frames/s) for the CCTV-9 sample on the GitHub CI machine:
+|Linux|Windows|MacOS|
+|-----|-------|-----
+|28.81|22.43|28.99|
+
+83.92 frames/s on MacBook Air M4
+
 ## Broadcast Roadmap
 
 This checklist follows GB/T 20090.16-2016. `Implemented` means that the rule
