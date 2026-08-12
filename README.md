@@ -30,6 +30,25 @@ These are partial standard paths; YUV422, progressive/frame structures,
 4x4/VBS broadcast syntax, complete low-delay rules, and full-picture
 conformance remain pending.
 
+### Decode the Sample and Generate a Video
+
+The decoder writes raw planar YUV. With FFmpeg installed, decode the bundled
+sample and convert it to an MP4 video as follows:
+
+```sh
+mkdir -p artifacts
+cmake --build build
+./build/cavsdec --log info --output artifacts/cctv9-decoded.yuv \
+  sample/CCTV-9.avs
+ffmpeg -y -f rawvideo -pix_fmt yuv420p -s 720x576 -r 25 \
+  -i artifacts/cctv9-decoded.yuv -c:v libx264 -pix_fmt yuv420p \
+  -movflags +faststart artifacts/cctv9.mp4
+```
+
+The sample is YUV420 at 720x576 and 25 fps. Its final Broadcast picture is
+incomplete; the decoder still writes the preceding complete frames, while
+the final output may report a truncated trailing picture.
+
 ## Broadcast Roadmap
 
 This checklist follows GB/T 20090.16-2016. `Implemented` means that the rule
