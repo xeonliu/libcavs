@@ -16,10 +16,10 @@ static uint16_t field_end_row(const cavs_picture *picture, uint8_t field) {
     return picture->macroblock_height;
 }
 
-cavs_result cavs_slice_cursor_init(const cavs_picture *picture, uint8_t field,
-                                   uint16_t slice_row, size_t header_bits,
-                                   size_t payload_bits,
-                                   cavs_slice_cursor *cursor) {
+cavs_result cavs_slice_cursor_init_range(
+    const cavs_picture *picture, uint8_t field, uint16_t slice_row,
+    uint16_t end_row, size_t header_bits, size_t payload_bits,
+    cavs_slice_cursor *cursor) {
     cavs_slice_cursor parsed;
     uint32_t x;
     uint32_t y;
@@ -31,6 +31,10 @@ cavs_result cavs_slice_cursor_init(const cavs_picture *picture, uint8_t field,
     result = cavs_picture_field_position(picture, field, slice_row, 0U,
                                          &x, &y, &step);
     if (result != CAVS_OK) return result;
+    if (end_row <= slice_row ||
+        cavs_picture_field_position(picture, field, (uint16_t)(end_row - 1U),
+                                    0U, &x, &y, &step) != CAVS_OK)
+        return CAVS_ERR_CORRUPT_BITSTREAM;
     (void)x;
     (void)y;
     (void)step;
@@ -41,9 +45,21 @@ cavs_result cavs_slice_cursor_init(const cavs_picture *picture, uint8_t field,
         (uint32_t)slice_row * picture->macroblock_width;
     parsed.row = slice_row;
     parsed.start_row = slice_row;
+    parsed.end_row = end_row;
     parsed.field = field;
     *cursor = parsed;
     return CAVS_OK;
+}
+
+cavs_result cavs_slice_cursor_init(const cavs_picture *picture, uint8_t field,
+                                   uint16_t slice_row, size_t header_bits,
+                                   size_t payload_bits,
+                                   cavs_slice_cursor *cursor) {
+    uint16_t end_row;
+    if (picture == NULL) return CAVS_ERR_INVALID_ARGUMENT;
+    end_row = field_end_row(picture, field);
+    return cavs_slice_cursor_init_range(picture, field, slice_row, end_row,
+                                        header_bits, payload_bits, cursor);
 }
 
 cavs_result cavs_slice_decode(
@@ -51,7 +67,6 @@ cavs_result cavs_slice_decode(
     void *reader_opaque,
     const cavs_broadcast_reconstruction_context *reconstruction) {
     cavs_picture *picture;
-    uint16_t end_row;
     if (cursor == NULL || read_macroblock == NULL || reconstruction == NULL ||
         reconstruction->picture == NULL || cursor->finished != 0U ||
         cursor->field != reconstruction->field ||
@@ -62,7 +77,9 @@ cavs_result cavs_slice_decode(
         cursor->column >= picture->macroblock_width ||
         cursor->row >= picture->macroblock_height)
         return CAVS_ERR_INVALID_STATE;
-    end_row = field_end_row(picture, cursor->field);
+    if (cursor->end_row <= cursor->start_row ||
+        cursor->end_row > field_end_row(picture, cursor->field))
+        return CAVS_ERR_CORRUPT_BITSTREAM;
     for (;;) {
         cavs_macroblock macroblock;
         cavs_result result;
@@ -70,10 +87,9 @@ cavs_result cavs_slice_decode(
         result = read_macroblock(reader_opaque, cursor->macroblock_address,
                                  &macroblock);
         if (result == CAVS_EOF) {
-            if (cursor->column != 0U || cursor->row != end_row)
+            if (cursor->column != 0U || cursor->row != cursor->end_row)
                 return CAVS_ERR_CORRUPT_BITSTREAM;
             cursor->finished = 1U;
-            picture->completed_fields |= cursor->field;
             return CAVS_OK;
         }
         if (result != CAVS_OK) return result;
@@ -92,16 +108,15 @@ cavs_result cavs_slice_decode(
         if (cursor->column == picture->macroblock_width) {
             cursor->column = 0U;
             ++cursor->row;
-            if (cursor->row > end_row)
+            if (cursor->row > cursor->end_row)
                 return CAVS_ERR_CORRUPT_BITSTREAM;
         }
-        if (cursor->row == end_row) {
+        if (cursor->row == cursor->end_row) {
             result = read_macroblock(reader_opaque,
                                      cursor->macroblock_address, &macroblock);
             if (result != CAVS_EOF)
                 return result == CAVS_OK ? CAVS_ERR_CORRUPT_BITSTREAM : result;
             cursor->finished = 1U;
-            picture->completed_fields |= cursor->field;
             return CAVS_OK;
         }
     }

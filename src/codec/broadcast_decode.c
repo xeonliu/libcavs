@@ -5,6 +5,7 @@
  * GB/T 20090.16-2016 7.4 and 9.2-9.10 broadcast field-slice decoding.
  */
 #include "codec/broadcast_decode.h"
+#include "codec/broadcast_basic_macroblock.h"
 #include "codec/broadcast_macroblock.h"
 #include "codec/broadcast_motion.h"
 #include "codec/slice_decode.h"
@@ -13,6 +14,7 @@
 
 typedef struct cavs_broadcast_reader_state {
     cavs_broadcast_slice_decoder entropy;
+    cavs_broadcast_basic_decoder basic;
     const cavs_dpb *dpb;
     cavs_picture *picture;
     cavs_picture_type picture_type;
@@ -23,9 +25,12 @@ typedef struct cavs_broadcast_reader_state {
     uint8_t fixed_qp;
     uint8_t previous_qp;
     int8_t previous_qp_delta;
+    uint8_t slice_weighting_flag;
     uint8_t mb_weighting_flag;
+    uint8_t advanced_entropy_enabled;
     uint16_t slice_id;
     uint16_t start_row;
+    uint16_t end_row;
     uint32_t skip_remaining;
     uint8_t explicit_pending;
     size_t last_bit_offset;
@@ -64,7 +69,7 @@ int cavs_broadcast_picture_supported(
         weighting_quant = pb_picture->weighting_quant_flag;
     }
     return progressive_frame == 0U && picture_structure == 0U &&
-        advanced_entropy != 0U && weighting_quant == 0U;
+        advanced_entropy <= 1U && weighting_quant <= 1U;
 }
 
 /*
@@ -115,21 +120,62 @@ cavs_result cavs_broadcast_loop_filter_config(
     return CAVS_OK;
 }
 
-static cavs_result broadcast_field_for_row(const cavs_picture *picture,
-                                           uint16_t row, uint8_t *field) {
+static cavs_result broadcast_field_geometry(const cavs_picture *picture,
+                                            uint8_t field,
+                                            uint16_t *start_row,
+                                            uint16_t *end_row) {
     uint16_t field_rows;
     uint8_t first;
-    if (picture == NULL || field == NULL || picture->field_picture == 0U ||
+    if (picture == NULL || start_row == NULL || end_row == NULL ||
+        picture->field_picture == 0U ||
         (picture->macroblock_height & 1U) != 0U)
         return CAVS_ERR_INVALID_ARGUMENT;
     field_rows = (uint16_t)(picture->macroblock_height / 2U);
-    if (row != 0U && row != field_rows)
-        return CAVS_ERR_CORRUPT_BITSTREAM;
     first = picture->top_field_first != 0U ? CAVS_FIELD_TOP :
                                              CAVS_FIELD_BOTTOM;
-    *field = row == 0U ? first :
-        (first == CAVS_FIELD_TOP ? CAVS_FIELD_BOTTOM : CAVS_FIELD_TOP);
+    if (field != first && field !=
+            (first == CAVS_FIELD_TOP ? CAVS_FIELD_BOTTOM : CAVS_FIELD_TOP))
+        return CAVS_ERR_CORRUPT_BITSTREAM;
+    if (field == first) {
+        *start_row = 0U;
+        *end_row = field_rows;
+    } else {
+        *start_row = field_rows;
+        *end_row = picture->macroblock_height;
+    }
     return CAVS_OK;
+}
+
+cavs_result cavs_broadcast_field_range(const cavs_picture *picture,
+                                        uint8_t field, uint16_t *start_row,
+                                        uint16_t *end_row) {
+    return broadcast_field_geometry(picture, field, start_row, end_row);
+}
+
+cavs_result cavs_broadcast_field_for_row(const cavs_picture *picture,
+                                          uint16_t row, uint8_t *field) {
+    uint16_t start_row;
+    uint16_t end_row;
+    uint8_t first;
+    cavs_result result;
+    if (field == NULL) return CAVS_ERR_INVALID_ARGUMENT;
+    if (picture == NULL) return CAVS_ERR_INVALID_ARGUMENT;
+    first = picture != NULL && picture->top_field_first != 0U ?
+        CAVS_FIELD_TOP : CAVS_FIELD_BOTTOM;
+    if (row >= picture->macroblock_height)
+        return CAVS_ERR_CORRUPT_BITSTREAM;
+    *field = row < picture->macroblock_height / 2U ? first :
+        (first == CAVS_FIELD_TOP ? CAVS_FIELD_BOTTOM : CAVS_FIELD_TOP);
+    result = broadcast_field_geometry(picture, *field, &start_row, &end_row);
+    (void)start_row;
+    (void)end_row;
+    return result;
+}
+
+cavs_result cavs_broadcast_field_end_row(const cavs_picture *picture,
+                                          uint8_t field, uint16_t *end_row) {
+    uint16_t start_row;
+    return broadcast_field_geometry(picture, field, &start_row, end_row);
 }
 
 /* Expands one run-coded skipped macroblock without inventing source bits. */
@@ -166,6 +212,9 @@ static cavs_result broadcast_motion_references(
     unsigned index;
     if (dpb == NULL || motion == NULL) return CAVS_ERR_INVALID_ARGUMENT;
     for (direction = 0U; direction < CAVS_MB_DIRECTIONS; ++direction) {
+        if (direction == CAVS_PRED_FORWARD &&
+            motion->no_forward_reference != 0U)
+            continue;
         for (index = 0U; index < CAVS_BROADCAST_REFERENCE_COUNT; ++index) {
             cavs_dpb_reference reference;
             cavs_result result = cavs_dpb_select_reference_entry(
@@ -444,11 +493,11 @@ static cavs_result read_broadcast_macroblock(
     working = *reader;
     field_start = (uint32_t)working.start_row *
         working.picture->macroblock_width;
-    field_end = field_start +
-        (uint32_t)(working.picture->macroblock_height / 2U) *
-        working.picture->macroblock_width;
+    field_end = (uint32_t)working.end_row * working.picture->macroblock_width;
     if (macroblock_address == field_end)
-        return cavs_broadcast_slice_finish(&working.entropy);
+        return working.advanced_entropy_enabled != 0U ?
+            cavs_broadcast_slice_finish(&working.entropy) :
+            cavs_broadcast_basic_finish(&working.basic);
     if (macroblock_address < field_start || macroblock_address > field_end)
         return CAVS_ERR_CORRUPT_BITSTREAM;
     predicted_field = working.picture_type != CAVS_PICTURE_I ||
@@ -456,13 +505,18 @@ static cavs_result read_broadcast_macroblock(
          macroblock_address >= working.picture->macroblock_count / 2U);
     if (working.skip_remaining == 0U && working.explicit_pending == 0U &&
         working.skip_mode_flag != 0U && predicted_field) {
-        result = cavs_broadcast_decode_skip_run(
-            &working.entropy, field_end - macroblock_address,
-            &working.skip_remaining);
+        result = working.advanced_entropy_enabled != 0U ?
+            cavs_broadcast_decode_skip_run(
+                &working.entropy, field_end - macroblock_address,
+                &working.skip_remaining) :
+            cavs_broadcast_basic_skip_run(
+                &working.basic, field_end - macroblock_address,
+                &working.skip_remaining);
         if (result != CAVS_OK) return result;
         working.explicit_pending = 1U;
-        working.last_bit_offset = cavs_ae_bit_offset(
-            &working.entropy.arithmetic);
+        working.last_bit_offset = working.advanced_entropy_enabled != 0U ?
+            cavs_ae_bit_offset(&working.entropy.arithmetic) :
+            working.basic.bit_offset;
         if (working.skip_remaining != 0U)
             working.previous_qp_delta = 0;
     }
@@ -489,6 +543,7 @@ static cavs_result read_broadcast_macroblock(
     context.fixed_qp = working.fixed_qp;
     context.previous_qp = working.previous_qp;
     context.previous_qp_delta = working.previous_qp_delta;
+    context.slice_weighting_flag = working.slice_weighting_flag;
     context.mb_weighting_flag = working.mb_weighting_flag;
     context.macroblock_index = macroblock_address;
     context.macroblock_width = working.picture->macroblock_width;
@@ -501,8 +556,33 @@ static cavs_result read_broadcast_macroblock(
             working.picture->macroblock_width)
         context.top = &working.entropy_row[
             macroblock_address % working.picture->macroblock_width];
-    result = cavs_decode_broadcast_macroblock(&working.entropy, &context,
-                                              &parsed);
+    if (working.advanced_entropy_enabled != 0U) {
+        result = cavs_decode_broadcast_macroblock(&working.entropy, &context,
+                                                  &parsed);
+    } else {
+        cavs_broadcast_basic_mb_context basic_context;
+        memset(&basic_context, 0, sizeof(basic_context));
+        basic_context.profile_id = context.profile_id;
+        basic_context.format = context.format;
+        basic_context.picture_type = context.picture_type;
+        basic_context.progressive_frame = context.progressive_frame;
+        basic_context.picture_structure = context.picture_structure;
+        basic_context.skip_mode_flag = context.skip_mode_flag;
+        basic_context.picture_reference_flag = context.picture_reference_flag;
+        basic_context.fixed_qp = context.fixed_qp;
+        basic_context.previous_qp = context.previous_qp;
+        basic_context.previous_qp_delta = context.previous_qp_delta;
+        basic_context.slice_weighting_flag = context.slice_weighting_flag;
+        basic_context.mb_weighting_flag = context.mb_weighting_flag;
+        basic_context.macroblock_index = context.macroblock_index;
+        basic_context.macroblock_width = context.macroblock_width;
+        basic_context.macroblock_height = context.macroblock_height;
+        basic_context.slice_id = context.slice_id;
+        basic_context.left = context.left;
+        basic_context.top = context.top;
+        result = cavs_decode_broadcast_basic_macroblock(
+            &working.basic, &basic_context, &parsed);
+    }
     if (result != CAVS_OK) return result;
     working.previous_qp = parsed.qp;
     working.previous_qp_delta = parsed.qp_delta;
@@ -518,7 +598,8 @@ static cavs_result read_broadcast_macroblock(
 
 cavs_result cavs_broadcast_decode_slice(
     const cavs_broadcast_decode_context *decode,
-    const uint8_t *data, size_t bit_size, uint8_t *decoded_field) {
+    const uint8_t *data, size_t bit_size, uint16_t end_row,
+    uint8_t *decoded_field) {
     cavs_picture *picture;
     cavs_broadcast_reader_state reader;
     cavs_macroblock *entropy_row;
@@ -532,20 +613,23 @@ cavs_result cavs_broadcast_decode_slice(
     uint8_t picture_reference_flag;
     int8_t chroma_delta_cb;
     int8_t chroma_delta_cr;
+    uint8_t weight_matrix[CAVS_BROADCAST_QUANT_MATRIX_SIZE];
+    const uint8_t *weight_matrix_pointer;
+    uint8_t weighting_quant_flag;
     cavs_motion_profile_capability motion;
     cavs_result result;
     if (decode == NULL || decode->config == NULL ||
         decode->sequence == NULL || decode->dpb == NULL ||
         decode->frame == NULL || decode->i_picture == NULL ||
         decode->pb_picture == NULL || decode->slice == NULL ||
-        decode->prediction == NULL || decode->next_slice_id == NULL ||
+        decode->prediction == NULL ||
         decoded_field == NULL || data == NULL ||
         decode->slice->header_bits > bit_size)
         return decode == NULL || data == NULL || decoded_field == NULL ?
             CAVS_ERR_INVALID_ARGUMENT : CAVS_ERR_CORRUPT_BITSTREAM;
     picture = cavs_frame_picture(decode->frame);
-    result = broadcast_field_for_row(picture,
-                                     decode->slice->macroblock_row, &field);
+    result = cavs_broadcast_field_for_row(picture,
+                                          decode->slice->macroblock_row, &field);
     if (result != CAVS_OK) return result;
     first = picture->top_field_first != 0U ? CAVS_FIELD_TOP :
                                             CAVS_FIELD_BOTTOM;
@@ -554,8 +638,18 @@ cavs_result cavs_broadcast_decode_slice(
         (picture->completed_fields != 0U &&
          picture->completed_fields != first))
         return CAVS_ERR_INVALID_STATE;
-    result = cavs_dpb_begin_picture(decode->dpb, picture, field);
-    if (result != CAVS_OK) return result;
+    {
+        uint16_t field_start;
+        uint16_t field_end;
+        result = broadcast_field_geometry(picture, field, &field_start,
+                                          &field_end);
+        if (result != CAVS_OK || decode->slice->macroblock_row < field_start ||
+            end_row <= decode->slice->macroblock_row || end_row > field_end)
+            return CAVS_ERR_CORRUPT_BITSTREAM;
+    }
+    if (decode->dpb->current_picture != picture ||
+        decode->dpb->current_field != field)
+        return CAVS_ERR_INVALID_STATE;
     if (decode->picture_type == CAVS_PICTURE_I) {
         progressive_frame = decode->i_picture->progressive_frame;
         picture_structure = decode->i_picture->picture_structure;
@@ -563,6 +657,19 @@ cavs_result cavs_broadcast_decode_slice(
         picture_reference_flag = 1U;
         chroma_delta_cb = decode->i_picture->chroma_quant_parameter_delta_cb;
         chroma_delta_cr = decode->i_picture->chroma_quant_parameter_delta_cr;
+        weighting_quant_flag = decode->i_picture->weighting_quant_flag;
+        weight_matrix_pointer = NULL;
+        if (weighting_quant_flag != 0U) {
+            /* GB/T 20090.16-2016 9.9 derives the picture wqM8x8 once. */
+            result = cavs_broadcast_build_weight_matrix(
+                decode->i_picture->weighting_quant_parameter_index,
+                decode->i_picture->weighting_quant_model,
+                decode->i_picture->weighting_quant_parameter_delta1,
+                decode->i_picture->weighting_quant_parameter_delta2,
+                weight_matrix);
+            if (result != CAVS_OK) return result;
+            weight_matrix_pointer = weight_matrix;
+        }
     } else {
         progressive_frame = decode->pb_picture->progressive_frame;
         picture_structure = decode->pb_picture->picture_structure;
@@ -570,6 +677,19 @@ cavs_result cavs_broadcast_decode_slice(
         picture_reference_flag = decode->pb_picture->picture_reference_flag;
         chroma_delta_cb = decode->pb_picture->chroma_quant_parameter_delta_cb;
         chroma_delta_cr = decode->pb_picture->chroma_quant_parameter_delta_cr;
+        weighting_quant_flag = decode->pb_picture->weighting_quant_flag;
+        weight_matrix_pointer = NULL;
+        if (weighting_quant_flag != 0U) {
+            /* GB/T 20090.16-2016 9.9 derives the picture wqM8x8 once. */
+            result = cavs_broadcast_build_weight_matrix(
+                decode->pb_picture->weighting_quant_parameter_index,
+                decode->pb_picture->weighting_quant_model,
+                decode->pb_picture->weighting_quant_parameter_delta1,
+                decode->pb_picture->weighting_quant_parameter_delta2,
+                weight_matrix);
+            if (result != CAVS_OK) return result;
+            weight_matrix_pointer = weight_matrix;
+        }
     }
     memset(&reader, 0, sizeof(reader));
     reader.dpb = decode->dpb;
@@ -582,8 +702,10 @@ cavs_result cavs_broadcast_decode_slice(
     reader.fixed_qp = decode->slice->fixed_slice_qp;
     reader.previous_qp = decode->slice->slice_qp;
     reader.mb_weighting_flag = decode->slice->mb_weighting_flag;
-    reader.slice_id = (*decode->next_slice_id)++;
+    reader.slice_weighting_flag = decode->slice->slice_weighting_flag;
+    reader.slice_id = decode->slice_id;
     reader.start_row = decode->slice->macroblock_row;
+    reader.end_row = end_row;
     reader.prediction = decode->prediction;
     reader.motion.picture_type = decode->picture_type;
     reader.motion.picture_structure = picture_structure;
@@ -591,6 +713,19 @@ cavs_result cavs_broadcast_decode_slice(
     reader.motion.second_field = (uint8_t)(field != first);
     reader.motion.pb_field_enhanced = decode->picture_type == CAVS_PICTURE_I ?
         0U : decode->pb_picture->pb_field_enhanced_flag;
+    reader.motion.no_forward_reference = decode->picture_type == CAVS_PICTURE_I ?
+        0U : decode->pb_picture->no_forward_reference_flag;
+    reader.motion.slice_weighting_flag = decode->slice->slice_weighting_flag;
+    reader.motion.mb_weighting_flag = decode->slice->mb_weighting_flag;
+    reader.motion.weight_parameter_count = decode->slice->number_of_references;
+    memcpy(reader.motion.luma_scale, decode->slice->luma_scale,
+           sizeof(reader.motion.luma_scale));
+    memcpy(reader.motion.luma_shift, decode->slice->luma_shift,
+           sizeof(reader.motion.luma_shift));
+    memcpy(reader.motion.chroma_scale, decode->slice->chroma_scale,
+           sizeof(reader.motion.chroma_scale));
+    memcpy(reader.motion.chroma_shift, decode->slice->chroma_shift,
+           sizeof(reader.motion.chroma_shift));
     result = broadcast_motion_profile_capability(decode->sequence, &motion);
     if (result != CAVS_OK) return result;
     reader.motion.precision = motion.luma_precision;
@@ -607,28 +742,47 @@ cavs_result cavs_broadcast_decode_slice(
     memset(entropy_row, 0,
         (size_t)picture->macroblock_width * sizeof(*entropy_row));
     reader.entropy_row = entropy_row;
-    result = cavs_broadcast_slice_init(&reader.entropy, data, bit_size,
-                                       decode->slice->header_bits);
+    reader.advanced_entropy_enabled = (uint8_t)(decode->picture_type ==
+        CAVS_PICTURE_I ? decode->i_picture->advanced_entropy_enabled :
+                         decode->pb_picture->advanced_entropy_enabled);
+    result = reader.advanced_entropy_enabled != 0U ?
+        cavs_broadcast_slice_init(&reader.entropy, data, bit_size,
+                                  decode->slice->header_bits) :
+        cavs_broadcast_basic_init(&reader.basic, data, bit_size,
+                                  decode->slice->header_bits);
     if (result != CAVS_OK) {
         decode->config->free(decode->config->allocator_opaque, entropy_row);
         return result;
     }
-    reader.last_bit_offset = cavs_ae_bit_offset(&reader.entropy.arithmetic);
+    reader.last_bit_offset = reader.advanced_entropy_enabled != 0U ?
+        cavs_ae_bit_offset(&reader.entropy.arithmetic) :
+        reader.basic.bit_offset;
     memset(&reconstruction, 0, sizeof(reconstruction));
     reconstruction.picture = picture;
     reconstruction.inter_prediction = decode->prediction;
     reconstruction.slice_id = reader.slice_id;
     reconstruction.field = field;
+    reconstruction.weighting_quant_flag = weighting_quant_flag;
+    reconstruction.weight_matrix = weight_matrix_pointer;
     reconstruction.chroma_qp_delta_cb = chroma_delta_cb;
     reconstruction.chroma_qp_delta_cr = chroma_delta_cr;
-    result = cavs_slice_cursor_init(picture, field,
-        decode->slice->macroblock_row, decode->slice->header_bits,
+    result = cavs_slice_cursor_init_range(picture, field,
+        decode->slice->macroblock_row, end_row, decode->slice->header_bits,
         bit_size, &cursor);
     if (result == CAVS_OK)
         result = cavs_slice_decode(&cursor, read_broadcast_macroblock, &reader,
                                    &reconstruction);
     decode->config->free(decode->config->allocator_opaque, entropy_row);
     if (result != CAVS_OK) return result;
-    *decoded_field = field;
+    {
+        uint16_t field_end;
+        result = cavs_broadcast_field_end_row(picture, field, &field_end);
+        if (result != CAVS_OK) return result;
+        if (end_row == field_end) {
+            *decoded_field = field;
+        } else {
+            *decoded_field = 0U;
+        }
+    }
     return CAVS_OK;
 }

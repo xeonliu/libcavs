@@ -185,8 +185,9 @@ static void append_directed_candidate(
     cavs_dpb_reference candidates[5], size_t *candidate_count) {
     candidate.block_distance = directed_distance(
         dpb->current_distance, candidate.distance, direction);
-    if (candidate.block_distance != 0U &&
-        candidate.block_distance < CAVS_DPB_DISTANCE_MODULUS / 2U)
+    /* GB/T 20090.16-2016 9.4.6.1 defines the directed distance modulo 512;
+     * it does not impose an extra half-modulus cutoff. */
+    if (candidate.block_distance != 0U)
         append_candidate(candidate, candidates, candidate_count);
 }
 

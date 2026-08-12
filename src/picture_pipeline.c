@@ -32,6 +32,15 @@ struct cavs_picture_pipeline {
     int frame_pending;
     int current_frame_has_data;
     uint16_t next_slice_id;
+    /* GB/T 20090.16-2016 7.4/9.3: defer a slice until its end row is known. */
+    struct {
+        uint8_t *data;
+        size_t bit_size;
+        cavs_slice_header header;
+        uint8_t field;
+        uint16_t slice_id;
+        uint8_t active;
+    } broadcast_pending;
     cavs_macroblock_prediction_420 broadcast_prediction;
     cavs_dpb dpb;
     uint8_t *luma_modes;
@@ -40,6 +49,33 @@ struct cavs_picture_pipeline {
     int64_t picture_pts;
     int64_t picture_dts;
 };
+
+static cavs_result finish_broadcast_reconstruction(
+    cavs_picture_pipeline *decoder, uint8_t field);
+static cavs_result decode_pending_broadcast_slice(
+    cavs_picture_pipeline *decoder, uint16_t end_row);
+
+/* GB/T 20090.16-2016 6.5/9.4.5: begin one physical field exactly once. */
+static cavs_result begin_broadcast_field(cavs_picture_pipeline *decoder,
+                                          uint8_t field) {
+    cavs_picture *picture;
+    if (decoder == NULL || decoder->current_frame == NULL)
+        return CAVS_ERR_INVALID_STATE;
+    picture = cavs_frame_picture(decoder->current_frame);
+    if (decoder->dpb.current_picture == picture &&
+        decoder->dpb.current_field == field)
+        return CAVS_OK;
+    return cavs_dpb_begin_picture(&decoder->dpb, picture, field);
+}
+
+/* Releases the deferred GB/T 20090.16-2016 7.4 slice payload. */
+static void release_broadcast_pending(cavs_picture_pipeline *decoder) {
+    if (decoder->broadcast_pending.data != NULL)
+        decoder->config.free(decoder->config.allocator_opaque,
+                             decoder->broadcast_pending.data);
+    memset(&decoder->broadcast_pending, 0,
+           sizeof(decoder->broadcast_pending));
+}
 
 /* Transfers one ready DPB output reference to the public event slot. */
 static cavs_result queue_next_dpb_frame(cavs_picture_pipeline *decoder) {
@@ -96,6 +132,7 @@ static int broadcast_picture_supported(const cavs_picture_pipeline *pipeline) {
 
 /* Frees the current picture, including its intra-mode side maps. */
 static void discard_current_picture(cavs_picture_pipeline *decoder) {
+    release_broadcast_pending(decoder);
     if (decoder->current_frame != NULL) {
         cavs_picture *picture = cavs_frame_picture(decoder->current_frame);
         if (decoder->dpb.current_picture == picture)
@@ -116,13 +153,27 @@ static void discard_current_picture(cavs_picture_pipeline *decoder) {
 
 /* Queues the current decoded picture for delivery before the next picture. */
 static cavs_result finish_current_picture(cavs_picture_pipeline *decoder) {
+    cavs_result result;
     if (decoder->current_frame == NULL) return CAVS_OK;
     if (broadcast_picture_supported(decoder)) {
         cavs_picture *picture = cavs_frame_picture(decoder->current_frame);
+        if (decoder->broadcast_pending.active != 0U) {
+            uint16_t end_row;
+            result = cavs_broadcast_field_end_row(
+                picture, decoder->broadcast_pending.field, &end_row);
+            if (result != CAVS_OK) return result;
+            /* The final pending slice is the last slice of its field. */
+            result = decode_pending_broadcast_slice(decoder, end_row);
+            if (result != CAVS_OK) {
+                discard_current_picture(decoder);
+                return result;
+            }
+        }
+        if (decoder->current_frame == NULL) return CAVS_OK;
         if (picture->completed_fields != CAVS_FIELD_BOTH ||
             picture->filtered == 0U) {
             discard_current_picture(decoder);
-            return CAVS_OK;
+            return CAVS_ERR_CORRUPT_BITSTREAM;
         }
         return CAVS_OK;
     }
@@ -214,6 +265,44 @@ static cavs_result finish_broadcast_reconstruction(cavs_picture_pipeline *decode
     return queue_next_dpb_frame(decoder);
 }
 
+/*
+ * GB/T 20090.16-2016 7.4 and 9.3: decode a deferred slice only after its
+ * following slice start row is known, or with the field end at picture finish.
+ */
+static cavs_result decode_pending_broadcast_slice(
+    cavs_picture_pipeline *decoder, uint16_t end_row) {
+    cavs_broadcast_decode_context decode;
+    uint8_t decoded_field;
+    cavs_result result;
+    if (decoder == NULL || decoder->current_frame == NULL ||
+        decoder->broadcast_pending.active == 0U || end_row == 0U)
+        return CAVS_ERR_INVALID_STATE;
+    memset(&decode, 0, sizeof(decode));
+    decode.config = &decoder->config;
+    decode.sequence = &decoder->sequence;
+    decode.dpb = &decoder->dpb;
+    decode.frame = decoder->current_frame;
+    decode.picture_type = decoder->picture_type;
+    decode.i_picture = &decoder->i_picture;
+    decode.pb_picture = &decoder->pb_picture;
+    decode.slice = &decoder->broadcast_pending.header;
+    decode.prediction = &decoder->broadcast_prediction;
+    decode.slice_id = decoder->broadcast_pending.slice_id;
+    result = cavs_broadcast_decode_slice(
+        &decode, decoder->broadcast_pending.data,
+        decoder->broadcast_pending.bit_size, end_row, &decoded_field);
+    if (result != CAVS_OK) return result;
+    release_broadcast_pending(decoder);
+    decoder->current_frame_has_data = 1;
+    if (decoded_field != 0U) {
+        cavs_picture *picture = cavs_frame_picture(decoder->current_frame);
+        /* GB/T 20090.16-2016 9.3: field completion is a pipeline commit. */
+        picture->completed_fields |= decoded_field;
+        return finish_broadcast_reconstruction(decoder, decoded_field);
+    }
+    return CAVS_OK;
+}
+
 /* Creates the current-picture and DPB state owned by one public decoder. */
 cavs_result cavs_picture_pipeline_create(
     const cavs_decoder_config *config, cavs_picture_pipeline **out) {
@@ -269,9 +358,9 @@ cavs_result cavs_picture_pipeline_finish_picture(
     if (decoder == NULL) return CAVS_ERR_INVALID_ARGUMENT;
     if (!decoder->has_picture) return CAVS_OK;
     result = finish_current_picture(decoder);
-    if (result != CAVS_OK) return result;
     decoder->has_picture = 0;
     decoder->has_slice = 0;
+    if (result != CAVS_OK) return result;
     return CAVS_OK;
 }
 
@@ -339,30 +428,84 @@ cavs_result cavs_picture_pipeline_decode_slice(
         context.advanced_entropy_enabled =
             decoder->pb_picture.advanced_entropy_enabled;
     }
+    /*
+     * GB/T 20090.16-2016 7.4/9.3: the slice carries one parameter slot for
+     * an I second field, two for a frame P/B picture, and four interleaved
+     * forward/backward slots for a field P/B picture. The parser ignores this
+     * count when the current I first field has no prediction syntax.
+     */
+    if (decoder->picture_type == CAVS_PICTURE_I)
+        context.number_of_references =
+            decoder->i_picture.picture_structure == 0U ? 1U : 0U;
+    else
+        context.number_of_references =
+            decoder->pb_picture.picture_structure == 0U ? 4U : 2U;
     result = cavs_unit_parse_slice(
         &decoder->config, start_code, data, size, &context, &decoder->slice,
         &payload);
     if (result != CAVS_OK) return result;
+    /* GB/T 20090.16-2016 7.4/9.3: a completed picture has no slice range. */
+    if (decoder->current_frame == NULL &&
+        broadcast_picture_supported(decoder)) {
+        cavs_unit_payload_release(&decoder->config, &payload);
+        decoder->has_picture = 0;
+        decoder->has_slice = 0;
+        return CAVS_ERR_INVALID_STATE;
+    }
     if (decoder->current_frame != NULL &&
         broadcast_picture_supported(decoder)) {
-        cavs_broadcast_decode_context decode;
-        uint8_t decoded_field;
-        memset(&decode, 0, sizeof(decode));
-        decode.config = &decoder->config;
-        decode.sequence = &decoder->sequence;
-        decode.dpb = &decoder->dpb;
-        decode.frame = decoder->current_frame;
-        decode.picture_type = decoder->picture_type;
-        decode.i_picture = &decoder->i_picture;
-        decode.pb_picture = &decoder->pb_picture;
-        decode.slice = &decoder->slice;
-        decode.prediction = &decoder->broadcast_prediction;
-        decode.next_slice_id = &decoder->next_slice_id;
-        result = cavs_broadcast_decode_slice(
-            &decode, payload.data, payload.bit_size, &decoded_field);
+        uint8_t field;
+        uint16_t current_end;
+        if (decoder->broadcast_pending.active != 0U) {
+            result = cavs_broadcast_field_for_row(
+                cavs_frame_picture(decoder->current_frame),
+                decoder->slice.macroblock_row, &field);
+            if (result == CAVS_OK &&
+                field != decoder->broadcast_pending.field)
+                result = cavs_broadcast_field_end_row(
+                    cavs_frame_picture(decoder->current_frame),
+                    decoder->broadcast_pending.field, &current_end);
+            else if (result == CAVS_OK)
+                current_end = decoder->slice.macroblock_row;
+            if (result != CAVS_OK || current_end <=
+                    decoder->broadcast_pending.header.macroblock_row)
+                result = CAVS_ERR_CORRUPT_BITSTREAM;
+            if (result == CAVS_OK)
+                result = decode_pending_broadcast_slice(decoder, current_end);
+            if (result == CAVS_OK && decoder->current_frame == NULL)
+                result = CAVS_ERR_INVALID_STATE;
+        }
         if (result == CAVS_OK) {
-            decoder->current_frame_has_data = 1;
-            result = finish_broadcast_reconstruction(decoder, decoded_field);
+            result = cavs_broadcast_field_for_row(
+                cavs_frame_picture(decoder->current_frame),
+                decoder->slice.macroblock_row, &field);
+        }
+        if (result == CAVS_OK) {
+            uint16_t field_start;
+            uint16_t field_end;
+            result = cavs_broadcast_field_range(
+                cavs_frame_picture(decoder->current_frame), field,
+                &field_start, &field_end);
+            if (result == CAVS_OK &&
+                decoder->broadcast_pending.active == 0U &&
+                decoder->dpb.current_field != field &&
+                decoder->slice.macroblock_row != field_start)
+                result = CAVS_ERR_CORRUPT_BITSTREAM;
+            (void)field_end;
+        }
+        if (result == CAVS_OK &&
+            decoder->broadcast_pending.active == 0U) {
+            result = begin_broadcast_field(decoder, field);
+        }
+        if (result == CAVS_OK) {
+            decoder->broadcast_pending.data = payload.data;
+            decoder->broadcast_pending.bit_size = payload.bit_size;
+            decoder->broadcast_pending.header = decoder->slice;
+            decoder->broadcast_pending.field = field;
+            decoder->broadcast_pending.slice_id = decoder->next_slice_id++;
+            decoder->broadcast_pending.active = 1U;
+            payload.data = NULL;
+            payload.bit_size = 0U;
         }
     } else if (decoder->current_frame != NULL) {
         cavs_baseline_decode_context decode;
@@ -377,7 +520,15 @@ cavs_result cavs_picture_pipeline_decode_slice(
             &decode, payload.data, payload.bit_size);
     }
     cavs_unit_payload_release(&decoder->config, &payload);
-    if (result != CAVS_OK) return result;
+    if (result != CAVS_OK) {
+        if (broadcast_picture_supported(decoder)) {
+            if (decoder->current_frame != NULL)
+                discard_current_picture(decoder);
+            decoder->has_picture = 0;
+            decoder->has_slice = 0;
+        }
+        return result;
+    }
     decoder->has_slice = 1;
     return CAVS_OK;
 }

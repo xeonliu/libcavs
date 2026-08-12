@@ -18,6 +18,7 @@ typedef struct cavs_slice_cursor {
     uint16_t row;
     uint16_t column;
     uint16_t start_row;
+    uint16_t end_row;
     uint8_t field;
     uint8_t finished;
 } cavs_slice_cursor;
@@ -47,7 +48,17 @@ cavs_result cavs_slice_cursor_init(const cavs_picture *picture, uint8_t field,
                                    size_t payload_bits,
                                    cavs_slice_cursor *cursor);
 
-/* Decodes exactly the remaining field macroblocks and verifies payload end. */
+/*
+ * GB/T 20090.16-2016 7.4 and 9.3: a slice ends at the next slice start row,
+ * or at the field end for the last slice. The explicit range keeps that
+ * boundary separate from the payload's arithmetic finalization bits.
+ */
+cavs_result cavs_slice_cursor_init_range(
+    const cavs_picture *picture, uint8_t field, uint16_t slice_row,
+    uint16_t end_row, size_t header_bits, size_t payload_bits,
+    cavs_slice_cursor *cursor);
+
+/* Decodes exactly the declared slice-row range and verifies payload end. */
 cavs_result cavs_slice_decode(
     cavs_slice_cursor *cursor, cavs_slice_macroblock_reader read_macroblock,
     void *reader_opaque,
