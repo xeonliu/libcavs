@@ -108,6 +108,7 @@ if(LIBCAVS_BUILD_TESTS)
     tests/unit/test_frame.c
     tests/unit/test_dpb.c
     tests/unit/test_slice_decode.c
+    tests/unit/test_broadcast_pipeline.c
     tests/unit/test_broadcast_quant.c
     tests/unit/test_broadcast_weighting.c
     tests/unit/test_broadcast_basic_macroblock.c

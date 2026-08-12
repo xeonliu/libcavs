@@ -21,6 +21,7 @@ void test_motion(void);
 void test_frame(void);
 void test_dpb(void);
 void test_slice_decode(void);
+void test_broadcast_pipeline(void);
 void test_broadcast_quant(void);
 void test_broadcast_weighting(void);
 void test_broadcast_basic_macroblock(void);
@@ -102,6 +103,7 @@ int main(void) {
     test_frame();
     test_dpb();
     test_slice_decode();
+    test_broadcast_pipeline();
     test_broadcast_quant();
     test_broadcast_weighting();
     test_broadcast_basic_macroblock();
