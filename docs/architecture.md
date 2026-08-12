@@ -61,13 +61,14 @@ discoverable after the source split; it does not replace the local comments.
 | --- | --- |
 | `codec/unit`, `codec/syntax`, `codec/pseudo_start_code`, `bitreader` | GB/T 20090.2-2013 7.1 Table 12, 7.2.2 Table 15, 7.3 Tables 21-22, 7.1.3.6 Table 26, 8.2 Tables 42-43, and normative Annexes A-B; corresponding GB/T 20090.16-2016 Tables 14, 21, 22, and 25 and normative Annex A |
 | `codec/advanced_entropy`, `codec/broadcast_macroblock` | GB/T 20090.16-2016 7.4-7.6, 8.3-8.4, 9.2-9.8, Tables 44-53, and informative Annex E |
+| `codec/broadcast_basic_macroblock` | GB/T 20090.16-2016 7.5-7.6, 8.2-8.3, 9.1-9.8, Tables 42 and 54-57, and normative Annex D basic VLC tables |
 | `codec/baseline_macroblock`, `codec/baseline_decode` | GB/T 20090.2-2013 7.1.3.7 Table 27, 9.2 Tables 59, 61, and 62, 9.4.4, and normative Annex D Tables D.1-D.20 |
-| `codec/motion`, `codec/broadcast_motion` | GB/T 20090.2-2013 9.4.6.2-9.4.6.3 and Figures 18 and 32; GB/T 20090.16-2016 9.4.3, 9.4.6, 9.9.1, Tables 55-58, and Figures 11-12 and 24-29 |
-| `codec/coefficients`, `dsp/transform`, `dsp/reconstruction`, `codec/broadcast_reconstruction` | GB/T 20090.2-2013 9.5.3, 9.7.1-9.7.2, 9.8.2-9.8.3, 9.11, Figures 33-34, and Tables 70-71; GB/T 20090.16-2016 9.5-9.10, Figures 22-23, and Table 62 |
+| `codec/motion`, `codec/broadcast_motion`, `codec/broadcast_weighting` | GB/T 20090.2-2013 9.4.6.2-9.4.6.3 and Figures 18 and 32; GB/T 20090.16-2016 7.4.6-7.4.11, 7.5.9, 9.3-9.4.6, Tables 25, 55-58, and Figures 11-12 and 24-29 |
+| `codec/coefficients`, `codec/broadcast_quant`, `dsp/transform`, `dsp/reconstruction`, `codec/broadcast_reconstruction` | GB/T 20090.2-2013 9.5.3, 9.7.1-9.7.2, 9.8.2-9.8.3, 9.11, Figures 33-34, and Tables 70-71; GB/T 20090.16-2016 9.2, 9.5-9.10, weighted matrix definitions, Figures 22-23, and Table 62 |
 | `dsp/prediction` | GB/T 20090.2-2013 9.9.1-9.9.4, Tables 65-66, and Figure 20 |
 | `dsp/motion_compensation` | GB/T 20090.2-2013 9.10.1-9.10.2 and Figures 36-43; GB/T 20090.16-2016 9.9.2 and Table 63 |
 | `codec/loop_filter`, `dsp/loop_filter` | GB/T 20090.16-2016 9.11, Figures 32-34, and Tables 64-65; GB/T 20090.2-2013 9.12, Figures 44-46, and Tables 73-74 |
-| `picture`, `codec/slice_decode`, `dpb` | GB/T 20090.16-2016 6.2-6.5, 7.4, 9.1, 9.3, 9.4.5-9.4.6.1, 9.8.2, and Figures 14-20; corresponding GB/T 20090.2-2013 3.27, 6.2, 9.5, and 9.6.1 |
+| `picture`, `frame`, `codec/slice_decode`, `picture_pipeline`, `dpb` | GB/T 20090.16-2016 6.2-6.5, 7.4, 9.1, 9.3, 9.4.5-9.4.6.1, 9.8.2-9.10, and Figures 14-20; corresponding GB/T 20090.2-2013 3.27, 6.2, 9.5, and 9.6.1. Slice spans are bounded by the next `slice_vertical_position` or the physical field end; field completion, filtering, DPB store, and display queue ownership remain in the pipeline. |
 
 ## DSP
 
