@@ -2,17 +2,9 @@
 
 libcavs is an independent C99 reimplementation of the video decoders defined
 by GB/T 20090.2-2013 baseline profile `0x20` and GB/T 20090.16-2016 broadcast
-profile `0x48`. The rewrite does not provide compatibility with any earlier
-libcavs API or source tree.
+profile `0x48`.
 
-The current `0.1.0-dev` tree includes a working scalar decoder for the
-broadcast-profile subset used by the local CCTV-9 regression stream. Profile
-support remains partial until the remaining standard features and independent
-conformance tests are complete. The local CCTV-9 file ends with an incomplete
-Broadcast picture; the strict pipeline rejects that trailing picture during
-flush under GB/T 20090.16-2016 7.4 and 9.3 after producing the preceding
-complete frames. The `/tmp/libcavs-reference` result is not a conformance
-oracle for this truncated tail.
+Currently only AVS-P16 Broadcast (profile `0x48`) with YUV 420 is implemented.
 
 ```sh
 cmake -S . -B build -DLIBCAVS_BUILD_TESTS=ON -DCMAKE_BUILD_TYPE=Release
@@ -22,13 +14,14 @@ ctest --test-dir build --output-on-failure
 
 `cavsdec [--frames N] [--log LEVEL] [--output FILE] input.avs` reads Annex-B
 input and writes decoded planar YUV frames. Use `-` for standard input or
-output. The implemented broadcast subset currently covers profile `0x48`,
-YUV420, successive interlaced field pictures, advanced and basic entropy
-dispatch, I/P/B pictures, default and selected weighted quantization, motion
-compensation, loop filtering, reference management, and display reordering.
-These are partial standard paths; YUV422, progressive/frame structures,
-4x4/VBS broadcast syntax, complete low-delay rules, and full-picture
-conformance remain pending.
+output. 
+
+## Samples
+
+| CCTV-9 | Joy of Life S02E01 |
+|:---:|:---:|
+| ![First I-frame decoded from CCTV-9.avs](assets/cctv9-first-i.png) | ![First I-frame decoded from joy-of-life-s02e01.avs](assets/joy-of-life-s02e01-first-i.png) |
+| First I-frame from `CCTV-9.avs`<br>profile `0x48`, level `0x2a`, 720x576 YUV420P8 interlaced | First I-frame from `joy-of-life-s02e01.avs`<br>profile `0x48`, level `0x41`, 1920x1080 YUV420P8 interlaced |
 
 ### Decode the Sample and Generate a Video
 
