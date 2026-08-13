@@ -4,7 +4,7 @@ libcavs is an independent C99 reimplementation of the video decoders defined
 by GB/T 20090.2-2013 baseline profile `0x20` and GB/T 20090.16-2016 broadcast
 profile `0x48`.
 
-Currently only AVS-P16 Broadcast (profile `0x48`) with YUV 420 is implemented.
+Currently only AVS-P16 Broadcast (profile `0x48`) with YUV 420, interlaced is implemented.
 
 ```sh
 cmake -S . -B build -DLIBCAVS_BUILD_TESTS=ON -DCMAKE_BUILD_TYPE=Release
