@@ -49,6 +49,21 @@ The sample is YUV420 at 720x576 and 25 fps. Its final Broadcast picture is
 incomplete; the decoder still writes the preceding complete frames, while
 the final output may report a truncated trailing picture.
 
+```
+./build/cavsdec --log info \
+    --output artifacts/joy-of-life-s02e01.yuv \
+    sample/joy-of-life-s02e01.avs
+
+ffmpeg -y \
+  -f rawvideo -pix_fmt yuv420p -s 1920x1088 -r 25 \
+  -i artifacts/joy-of-life-s02e01.yuv \
+  -vf "crop=1920:1080:0:0,setfield=tff" \
+  -c:v libx264 -pix_fmt yuv420p \
+  -flags +ilme+ildct -x264-params "tff=1" \
+  -color_primaries bt709 -color_trc bt709 -colorspace bt709 \
+  -movflags +faststart artifacts/joy-of-life-s02e01.mp4
+```
+
 ## Performance
 
 
